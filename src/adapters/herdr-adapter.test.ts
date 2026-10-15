@@ -1,924 +1,222 @@
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { HerdrAdapter, herdrCarrierName } from "./herdr-adapter";
-import { nodeHostEnv } from "../env/host-env";
+import { nodeHostEnv, type ExecOutcome } from "../env/host-env";
 import { HerdrRequestError } from "../utils/herdr-reply";
-import * as terminalAdapter from "../utils/terminal-adapter";
+import type { SpawnOptions } from "../utils/terminal-adapter";
+import type { TeamPaneLayout } from "../utils/team-pane-layout";
 
-const success = (result: unknown) => ({
-  stdout: JSON.stringify({ id: "cli:test", result }), stderr: "", status: 0,
-});
+const success = (result: unknown): ExecOutcome => ({ kind: "exited", stdout: JSON.stringify({ result }), stderr: "", status: 0 });
+const failure = (code: string, message = "synthetic error"): ExecOutcome => ({ kind: "exited", stdout: "", stderr: JSON.stringify({ error: { code, message } }), status: 1 });
+const ready = (pane_id = "new", name = "worker") => ({ type: "agent_started", argv: ["pi"], agent: { agent: "pi", pane_id, terminal_id: "terminal", name, interactive_ready: true } });
+const rect = (pane_id: string, width: number, height: number, x = 60, y = 0) => ({ pane_id, rect: { x, y, width, height } });
+const options = (workers: string[] = [], paneLayout?: TeamPaneLayout): SpawnOptions => ({ name: "worker", cwd: "/repo", argv: ["pi"], env: {},
+  panePlacement: { leaderPaneId: "leader", workerPaneIds: workers, paneLayout } });
+const adaptive: TeamPaneLayout = { leader_share: 0.6, worker_tiling: "adaptive" };
 
-const failure = (code: string, message: string, status = 1) => ({
-  stdout: "", stderr: JSON.stringify({ id: "cli:test", error: { code, message } }), status,
-});
-
-const leaderLayout = (paneId: string, width = 82) => success({ type: "pane_layout", layout: {
-  tab_id: "tab-origin", workspace_id: "workspace-origin",
-  panes: [{ pane_id: paneId, rect: { width } }],
-} });
-const renamed = success({ type: "ok" });
-
-// Official Herdr 0.7.5 and 0.8.0 return after interactive readiness.
-const readyStart = (paneId: string, name: string) => success({
-  type: "agent_started",
-  argv: ["pi"],
-  agent: {
-    agent: "pi",
-    pane_id: paneId,
-    terminal_id: `terminal-${paneId}`,
-    name,
-    interactive_ready: true,
-  },
-});
-
-describe("HerdrAdapter", () => {
-  let adapter: HerdrAdapter;
-  let exec: MockInstance<typeof terminalAdapter.execCommand>;
-
+describe("HerdrAdapter async contract", () => {
+  const adapter = new HerdrAdapter();
+  let run: MockInstance<typeof nodeHostEnv.exec.run>;
+  let panes: ReturnType<typeof rect>[];
   beforeEach(() => {
-    adapter = new HerdrAdapter();
-    exec = vi.spyOn(terminalAdapter, "execCommand");
-    vi.spyOn(nodeHostEnv.exec, "run").mockImplementation(async (command, args) => ({ kind: "exited", ...terminalAdapter.execCommand(command, [...args]) }));
-    vi.stubEnv("HERDR_ENV", "1");
-    vi.stubEnv("HERDR_TAB_ID", "tab-origin");
-    vi.stubEnv("HERDR_PANE_ID", "pane-origin");
-    vi.stubEnv("TMUX", "");
-    vi.stubEnv("TMUX_PANE", "");
+    panes = [rect("leader", 100, 60, 0)];
+    run = vi.spyOn(nodeHostEnv.exec, "run").mockImplementation(async (_command, args) => {
+      if (args[1] === "server") return success({});
+      if (args[1] === "layout") return success({ layout: { tab_id: "tab", workspace_id: "workspace", panes } });
+      if (args[1] === "get") return failure("pane_not_found");
+      if (args[1] === "split") return success({ pane: { pane_id: "new" } });
+      if (args[1] === "rename") return success({});
+      if (args[1] === "start") return success(ready());
+      throw new Error(`Unexpected fixture command ${args.join(" ")}`);
+    });
+    vi.spyOn(nodeHostEnv.exec, "runSync").mockImplementation(() => { throw new Error("sync exec reached"); });
+    vi.stubEnv("HERDR_ENV", "1"); vi.stubEnv("HERDR_TAB_ID", "tab"); vi.stubEnv("HERDR_PANE_ID", "leader");
+    vi.stubEnv("TMUX", ""); vi.stubEnv("TMUX_PANE", "");
   });
+  afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
+  const splitCalls = () => run.mock.calls.filter(([, args]) => args[1] === "split");
+  function expectSplit(target: string, direction: string) {
+    expect(splitCalls()).toHaveLength(1);
+    expect(splitCalls()[0][1]).toEqual(expect.arrayContaining(["split", "--pane", target, "--direction", direction]));
+  }
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllEnvs();
+  it("detects usable pane/tab identity even with nested tmux, but requires a direct carrier for launch", async () => {
+    expect(await adapter.detect()).toBe(true); expect(adapter.isDirectCarrier()).toBe(true);
+    vi.stubEnv("TMUX", "nested"); expect(await adapter.detect()).toBe(true); expect(adapter.isDirectCarrier()).toBe(false);
+    vi.stubEnv("TMUX", ""); vi.stubEnv("TMUX_PANE", "%nested"); expect(adapter.isDirectCarrier()).toBe(false);
+    run.mockResolvedValue(failure("unavailable")); expect(await adapter.detect()).toBe(false);
+    for (const key of ["HERDR_TAB_ID", "HERDR_PANE_ID", "HERDR_ENV"]) {
+      vi.stubEnv(key, ""); run.mockClear(); expect(await adapter.detect()).toBe(false); expect(run).not.toHaveBeenCalled();
+    }
   });
-
-  it("detects only a usable Herdr pane/tab environment and wins while nested in tmux", () => {
-    exec.mockReturnValue({ stdout: "status: running", stderr: "", status: 0 });
-    expect(adapter.detect()).toBe(true);
-    expect(exec).toHaveBeenCalledWith("herdr", ["status", "server"]);
-    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,123,0");
-    expect(adapter.detect()).toBe(true);
-
-    exec.mockReturnValue({ stdout: "", stderr: "not running", status: 1 });
-    expect(adapter.detect()).toBe(false);
-    exec.mockReturnValue({ stdout: "status: running", stderr: "", status: 0 });
-    vi.stubEnv("HERDR_TAB_ID", "");
-    expect(adapter.detect()).toBe(false);
-    vi.stubEnv("HERDR_TAB_ID", "tab-origin");
-    vi.stubEnv("HERDR_PANE_ID", "");
-    expect(adapter.detect()).toBe(false);
-    vi.stubEnv("HERDR_PANE_ID", "pane-origin");
-    vi.stubEnv("HERDR_ENV", "0");
-    expect(adapter.detect()).toBe(false);
-  });
-
-  it("distinguishes a visible Herdr surface from a direct Herdr carrier", () => {
-    expect(adapter.isDirectCarrier()).toBe(true);
-    vi.stubEnv("TMUX", "/tmp/tmux-1000/default,123,0");
-    expect(adapter.isDirectCarrier()).toBe(false);
-    vi.stubEnv("TMUX", "");
-    vi.stubEnv("TMUX_PANE", "%nested");
-    expect(adapter.isDirectCarrier()).toBe(false);
-  });
-
-  it("keeps qualified carrier names valid, bounded, and deterministic", () => {
+  it("keeps qualified carrier names valid, bounded and deterministic", () => {
     expect(herdrCarrierName("team-a", "worker")).toBe("team-a-worker");
-    const reviewer = herdrCarrierName("rc12-audit-canary-20260810", "reviewer");
-    expect(reviewer).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
-    expect(reviewer).toHaveLength(32);
-    expect(herdrCarrierName("rc12-audit-canary-20260810", "reviewer")).toBe(reviewer);
-    expect(herdrCarrierName("rc12-audit-canary-20260810", "maker")).not.toBe(reviewer);
+    const name = herdrCarrierName("rc12-audit-canary-20260810", "reviewer");
+    expect(name).toMatch(/^[a-z][a-z0-9_-]{0,31}$/); expect(name).toHaveLength(32);
+    expect(herdrCarrierName("rc12-audit-canary-20260810", "reviewer")).toBe(name);
+    expect(herdrCarrierName("rc12-audit-canary-20260810", "maker")).not.toBe(name);
     expect(herdrCarrierName("12 TEAM", "Reviewer")).toMatch(/^[a-z][a-z0-9_-]{0,31}$/);
   });
-
-  it("splits a direct Herdr pane then starts Pi there with structured argv and allowlisted environment", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("pane-worker", "team-a-worker"));
-
-    expect(adapter.spawn({
-      name: "worker",
-      cwd: "/repo with spaces",
-      argv: ["pi", "--model", "openai/model;not-a-shell", "--tools", "task_read,task_update"],
-      env: {
-        PI_TEAM_NAME: "team-a",
-        PI_AGENT_NAME: "worker",
-        HTTPS_PROXY: "http://127.0.0.1:6152",
-        OTHER: "must-not-pass",
-      },
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toBe("pane-worker");
-    expect(exec).toHaveBeenNthCalledWith(1, "herdr", ["pane", "get", "pane-origin"]);
-    expect(exec).toHaveBeenNthCalledWith(2, "herdr", ["pane", "layout", "--pane", "pane-origin"]);
-    expect(exec).toHaveBeenNthCalledWith(3, "herdr", [
-      "pane", "split", "--pane", "pane-origin", "--direction", "right", "--ratio", "0.6097560975609756",
-      "--cwd", "/repo with spaces",
-      "--env", "PI_TEAM_NAME=team-a",
-      "--env", "PI_AGENT_NAME=worker",
-      "--env", "HTTPS_PROXY=http://127.0.0.1:6152",
-      "--no-focus",
-    ]);
-    expect(exec).toHaveBeenNthCalledWith(4, "herdr", ["pane", "rename", "pane-worker", "worker"]);
-    expect(exec).toHaveBeenNthCalledWith(5, "herdr", [
-      "agent", "start", "team-a-worker",
-      "--kind", "pi",
-      "--pane", "pane-worker",
-      "--timeout", "300000",
-      "--",
-      "--model", "openai/model;not-a-shell", "--tools", "task_read,task_update",
-    ]);
-    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "run"]));
+  it("prepares the exact pane before start, with structured argv and allowlisted environment", async () => {
+    panes = [rect("leader", 82, 60, 0)];
+    const input = { ...options(), cwd: "/repo with spaces", argv: ["pi", "--model", "openai/model;not-a-shell", "--tools", "task_read,task_update"],
+      env: { PI_TEAM_NAME: "team-a", PI_AGENT_NAME: "worker", HTTPS_PROXY: "http://127.0.0.1:6152", OTHER: "must-not-pass" } };
+    expect(await adapter.prepareSpawn(input)).toBe("new");
+    expect(run.mock.calls.map(([, args]) => args[1])).toEqual(["layout", "split", "rename"]);
+    expect(splitCalls()[0][1]).toEqual(["pane", "split", "--pane", "leader", "--direction", "right", "--ratio", String(50 / 82),
+      "--cwd", "/repo with spaces", "--env", "PI_TEAM_NAME=team-a", "--env", "PI_AGENT_NAME=worker", "--env", "HTTPS_PROXY=http://127.0.0.1:6152", "--no-focus"]);
+    run.mockResolvedValueOnce(success(ready("new", "team-a-worker")));
+    await expect(adapter.startPrepared("new", input)).resolves.toMatchObject({ state: "started" });
+    expect(run.mock.calls.at(-1)?.[1]).toEqual(["agent", "start", "team-a-worker", "--kind", "pi", "--pane", "new", "--timeout", "300000", "--", ...input.argv.slice(1)]);
+    expect(nodeHostEnv.exec.runSync).not.toHaveBeenCalled();
   });
-
-  it("starts the Worker with a warning when its presentation label cannot be applied", () => {
+  it("retains a created target when naming fails", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(failure("pane_rename_failed", "label rejected"))
-      .mockReturnValueOnce(readyStart("pane-worker", "researcher"));
-
-    expect(adapter.spawn({
-      name: "researcher", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toBe("pane-worker");
-    expect(exec).toHaveBeenNthCalledWith(4, "herdr", ["pane", "rename", "pane-worker", "researcher"]);
-    expect(exec).toHaveBeenNthCalledWith(5, "herdr", expect.arrayContaining(["agent", "start", "researcher"]));
-    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "close"]));
-    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/pane-worker.*pane_rename_failed.*label rejected/i));
+    const normal = run.getMockImplementation()!;
+    run.mockImplementation(async (command, args, config) => args[1] === "rename" ? failure("pane_rename_failed", "label rejected") : normal(command, args, config));
+    expect(await adapter.prepareSpawn(options())).toBe("new");
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/new.*pane_rename_failed.*label rejected/));
+    expect(run.mock.calls.some(([, args]) => args[1] === "close")).toBe(false);
   });
-
-  it("splits an exact current Worker downward without changing the leader", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-1", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        tab_id: "tab-a", workspace_id: "w4",
-        panes: [
-          { pane_id: "pane-leader", rect: { x: 0, width: 60 } },
-          { pane_id: "pane-worker-1", rect: { x: 60, width: 40 } },
-        ],
-      } }))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("pane-worker-2", "worker-2"));
-
-    expect(adapter.spawn({
-      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["pane-worker-1"] },
-    })).toBe("pane-worker-2");
-    expect(exec).toHaveBeenNthCalledWith(1, "herdr", ["pane", "get", "pane-leader"]);
-    expect(exec).toHaveBeenNthCalledWith(2, "herdr", ["pane", "get", "pane-worker-1"]);
-    expect(exec).toHaveBeenNthCalledWith(3, "herdr", ["pane", "layout", "--pane", "pane-leader"]);
-    expect(exec).toHaveBeenNthCalledWith(4, "herdr", [
-      "pane", "split", "--pane", "pane-worker-1", "--direction", "down", "--ratio", "0.5",
-      "--cwd", "/repo", "--no-focus",
-    ]);
+  it("splits the exact last current Worker down in linear mode", async () => {
+    panes = [rect("leader", 60, 60, 0), rect("worker-1", 40, 30)];
+    await adapter.prepareSpawn(options(["worker-1"])); expectSplit("worker-1", "down");
   });
-
-  it("refuses a narrow pane when a valid high leader share rounds to 100%", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        panes: [{ pane_id: "pane-origin", rect: { width: 5 } }],
-      } }));
-
-    expect(() => adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-origin", workerPaneIds: [],
-        paneLayout: { leader_share: 0.9, worker_tiling: "linear" },
-      },
-    })).toThrow(/too narrow.*Worker region/i);
-    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
+  it.each(["adaptive", "grid"] as const)("uses live geometry for %s placement", async worker_tiling => {
+    panes = [rect("leader", 60, 42, 0), rect("worker", 48, 30)];
+    await adapter.prepareSpawn(options(["worker"], { ...adaptive, worker_tiling })); expectSplit("worker", "down");
   });
-
-  it("enforces the first leader share and 20x5 geometry before splitting adaptively", () => {
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        tab_id: "tab-a", workspace_id: "workspace-a",
-        panes: [{ pane_id: "pane-leader", rect: { x: 0, y: 0, width: 100, height: 5 } }],
-      } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: [],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
-      },
-    });
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "pane-leader", "--direction", "right", "--ratio", "0.6",
-    ]));
-  });
-
-  it("refuses the first Worker when the leader or Worker region is below 20x5", () => {
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        tab_id: "tab-a", workspace_id: "workspace-a",
-        panes: [{ pane_id: "pane-leader", rect: { x: 0, y: 0, width: 30, height: 5 } }],
-      } }));
-
-    expect(() => adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: [],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
-      },
-    })).toThrow(/insufficient.*first Worker/i);
-    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
-  });
-
-  it("uses grid as a read-compatible alias for live adaptive placement", () => {
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        tab_id: "tab-a", workspace_id: "workspace-a",
-        panes: [
-          { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 42 } },
-          { pane_id: "worker-1", rect: { x: 60, y: 0, width: 48, height: 30 } },
-        ],
-      } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-2" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-2", "worker-2"));
-
-    expect(adapter.spawn({
-      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-1"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "grid" },
-      },
-    })).toBe("worker-2");
-    expect(exec).toHaveBeenCalledWith("herdr", [
-      "pane", "split", "--pane", "worker-1", "--direction", "down", "--ratio", "0.5",
-      "--cwd", "/repo", "--no-focus",
-    ]);
-  });
-
-  it("ranks viable registered panes by max(width / columns_per_row, height) and splits the visual winner", () => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 42 } },
-      { pane_id: "worker-a", rect: { x: 60, y: 0, width: 100, height: 4 } },
-      { pane_id: "worker-b", rect: { x: 60, y: 0, width: 48, height: 30 } },
-      { pane_id: "worker-c", rect: { x: 60, y: 0, width: 40, height: 30 } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-a", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-b", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-c", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    expect(adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader",
-        workerPaneIds: ["worker-a", "worker-b", "worker-c"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
-      },
-    })).toBe("worker-new");
-    expect(exec).toHaveBeenCalledWith("herdr", [
-      "pane", "split", "--pane", "worker-b", "--direction", "down", "--ratio", "0.5",
-      "--cwd", "/repo", "--no-focus",
-    ]);
-  });
-
-  it("reports insufficient geometry without splitting when every registered candidate is too small", () => {
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-a", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-        { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 42 } },
-        { pane_id: "worker-a", rect: { x: 60, y: 0, width: 39, height: 5 } },
-      ] } }));
-
-    expect(() => adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-a"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
-      },
-    })).toThrow(/insufficient.*geometry/i);
-    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
-  });
-
-  it("ranks by normalized dimension instead of area", () => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 70 } },
-      { pane_id: "worker-area", rect: { x: 60, y: 0, width: 50, height: 30 } },
-      { pane_id: "worker-score", rect: { x: 60, y: 30, width: 40, height: 36 } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-area", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-score", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    expect(adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-area", "worker-score"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
-      },
-    })).toBe("worker-new");
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "worker-score", "--direction", "down",
-    ]));
-  });
-
-  it("re-reads live geometry after each split and follows reflowed panes", () => {
-    exec
-      // First Worker: leader 100x60, leader share 0.6 leaves a 40x60 region.
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        tab_id: "tab-a", workspace_id: "workspace-a",
-        panes: [{ pane_id: "pane-leader", rect: { x: 0, y: 0, width: 100, height: 60 } }],
-      } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-1", "worker-1"))
-      // Second Worker: the live layout makes worker-1 a 40x60 down-split candidate.
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        tab_id: "tab-a", workspace_id: "workspace-a",
-        panes: [
-          { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-          { pane_id: "worker-1", rect: { x: 60, y: 0, width: 40, height: 60 } },
-        ],
-      } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-2" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-2", "worker-2"))
-      // Third Worker: reflow leaves worker-2 larger; it must win over stale worker-1 geometry.
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-1", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-2", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ type: "pane_layout", layout: {
-        tab_id: "tab-a", workspace_id: "workspace-a",
-        panes: [
-          { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-          { pane_id: "worker-1", rect: { x: 60, y: 0, width: 40, height: 15 } },
-          { pane_id: "worker-2", rect: { x: 60, y: 15, width: 40, height: 30 } },
-        ],
-      } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-3" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-3", "worker-3"));
-
-    const policy = { leader_share: 0.6, worker_tiling: "adaptive" as const };
-    expect(adapter.spawn({ name: "worker-1", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: [], paneLayout: policy } })).toBe("worker-1");
-    expect(adapter.spawn({ name: "worker-2", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["worker-1"], paneLayout: policy } })).toBe("worker-2");
-    expect(adapter.spawn({ name: "worker-3", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["worker-1", "worker-2"], paneLayout: policy } })).toBe("worker-3");
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "worker-2", "--direction", "down",
-    ]));
-  });
-
-  it("breaks equal normalized scores by pane ID, independent of input order", () => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-      { pane_id: "worker-z", rect: { x: 60, y: 0, width: 40, height: 20 } },
-      { pane_id: "worker-a", rect: { x: 60, y: 20, width: 40, height: 20 } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-z", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-a", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-z", "worker-a"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
-      },
-    });
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "worker-a", "--direction", "right",
-    ]));
-  });
-
   it.each([
-    [2, "right"],
-    [3, "down"],
-  ] as const)("uses bias %s to choose the visual axis (%s)", (columnsPerRow, direction) => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-      { pane_id: "worker", rect: { x: 60, y: 0, width: 50, height: 20 } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: columnsPerRow },
-      },
-    });
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "worker", "--direction", direction,
-    ]));
+    [5, 60, 0.9, "linear", false], [100, 5, 0.6, "adaptive", true],
+    [30, 5, 0.6, "adaptive", false], [100, 4, 0.6, "adaptive", false],
+  ] as const)("checks first split geometry %sx%s, share %s (%s)", async (width, height, leader_share, worker_tiling, viable) => {
+    panes = [rect("leader", width, height, 0)];
+    const prepare = adapter.prepareSpawn(options([], { leader_share, worker_tiling }));
+    if (viable) { await prepare; expectSplit("leader", "right"); }
+    else { await expect(prepare).rejects.toThrow(/too narrow|insufficient/i); expect(splitCalls()).toEqual([]); }
   });
-
-  it("uses height for a square 50x50 pane", () => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-      { pane_id: "worker", rect: { x: 60, y: 0, width: 50, height: 50 } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: 2 },
-      },
-    });
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "worker", "--direction", "down",
-    ]));
+  it("ranks viable panes by normalized dimension, then pane ID, rather than area or input order", async () => {
+    panes = [rect("leader", 60, 70, 0), rect("invalid", 100, 4), rect("area", 50, 30), rect("score-z", 40, 36, 60, 30), rect("score-a", 40, 36, 60, 30)];
+    await adapter.prepareSpawn(options(["invalid", "area", "score-z", "score-a"], adaptive)); expectSplit("score-a", "down");
   });
-
+  it("re-reads geometry after each split and follows reflow", async () => {
+    await adapter.prepareSpawn(options([], adaptive)); expectSplit("leader", "right"); run.mockClear();
+    panes = [rect("leader", 60, 60, 0), rect("worker-1", 40, 60)];
+    await adapter.prepareSpawn(options(["worker-1"], adaptive)); expectSplit("worker-1", "down"); run.mockClear();
+    panes = [rect("leader", 60, 60, 0), rect("worker-1", 40, 15), rect("worker-2", 40, 30, 60, 15)];
+    await adapter.prepareSpawn(options(["worker-1", "worker-2"], adaptive)); expectSplit("worker-2", "down");
+  });
   it.each([
-    [41, 11, true, "right", 2],
-    [39, 11, false, "right", 2],
-    [37, 19, true, "down", 2],
-    [20, 9, false, "down", 3],
-    [20, 11, true, "down", 3],
-  ] as const)("handles odd dimensions %sx%s against the 20x5 minima", (width, height, viable, direction, columnsPerRow) => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-      { pane_id: "worker", rect: { x: 60, y: 0, width, height } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout);
-    if (viable) {
-      exec
-        .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-        .mockReturnValueOnce(renamed)
-        .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-      adapter.spawn({
-        name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-        panePlacement: {
-          leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
-          paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: columnsPerRow },
-        },
-      });
-      expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-        "pane", "split", "--pane", "worker", "--direction", direction,
-      ]));
-    } else {
-      expect(() => adapter.spawn({
-        name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-        panePlacement: {
-          leaderPaneId: "pane-leader", workerPaneIds: ["worker"],
-          paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", columns_per_row: columnsPerRow },
-        },
-      })).toThrow(/insufficient.*geometry/i);
-      expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["pane", "split"]));
-    }
+    [50, 20, 2, true, "right"], [50, 20, 3, true, "down"], [50, 50, 2, true, "down"],
+    [41, 11, 2, true, "right"], [39, 11, 2, false, "right"], [37, 19, 2, true, "down"],
+    [20, 9, 3, false, "down"], [20, 11, 3, true, "down"], [39, 5, 2, false, "right"],
+  ] as const)("checks axis and child minima for %sx%s with bias %s", async (width, height, columns_per_row, viable, direction) => {
+    panes = [rect("leader", 60, 60, 0), rect("worker", width, height)];
+    const prepare = adapter.prepareSpawn(options(["worker"], { ...adaptive, columns_per_row }));
+    if (viable) { await prepare; expectSplit("worker", direction); }
+    else { await expect(prepare).rejects.toThrow(/insufficient.*geometry/i); expect(splitCalls()).toEqual([]); }
   });
-
-  it("enforces the Worker limit before geometry queries", () => {
-    expect(() => adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-existing"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive", worker_limit: 1 },
-      },
-    })).toThrow(/Worker limit 1/i);
-    expect(exec).not.toHaveBeenCalled();
+  it("enforces registered Worker capacity without splitting", async () => {
+    await expect(adapter.prepareSpawn(options(["closed"], { ...adaptive, worker_limit: 1 }))).rejects.toThrow(/Worker limit 1/);
+    expect(splitCalls()).toEqual([]);
   });
-
-  it("skips stale and wrong-tab candidates, then selects a valid registered pane", () => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-      { pane_id: "worker-valid", rect: { x: 60, y: 0, width: 40, height: 30 } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(failure("pane_not_found", "stale"))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-moved", tab_id: "tab-b", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-valid", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-stale", "worker-moved", "worker-valid"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
-      },
-    });
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "worker-valid",
-    ]));
+  it("excludes wrong-tab, stale, vertical-region and unregistered candidates", async () => {
+    panes = [rect("leader", 60, 60, 0), rect("vertical", 100, 60, 60, 1), rect("rogue", 100, 60), rect("valid", 40, 30)];
+    const normal = run.getMockImplementation()!;
+    run.mockImplementation(async (command, args, config) => args[1] === "get" && args[2] === "moved"
+      ? success({ pane: { pane_id: "moved", tab_id: "other", workspace_id: "workspace" } }) : normal(command, args, config));
+    await adapter.prepareSpawn(options(["closed", "moved", "vertical", "valid"], adaptive)); expectSplit("valid", "down");
   });
-
-  it("excludes vertical-region candidates and panes absent from registration", () => {
-    const layout = success({ type: "pane_layout", layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes: [
-      { pane_id: "pane-leader", rect: { x: 0, y: 0, width: 60, height: 60 } },
-      { pane_id: "worker-vertical", rect: { x: 60, y: 1, width: 100, height: 60 } },
-      { pane_id: "rogue-not-registered", rect: { x: 60, y: 0, width: 100, height: 60 } },
-      { pane_id: "worker-valid", rect: { x: 60, y: 0, width: 40, height: 30 } },
-    ] } });
-    exec
-      .mockReturnValueOnce(success({ pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-vertical", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-valid", tab_id: "tab-a", workspace_id: "workspace-a" } }))
-      .mockReturnValueOnce(layout)
-      .mockReturnValueOnce(success({ pane: { pane_id: "worker-new" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(readyStart("worker-new", "worker-new"));
-
-    adapter.spawn({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-vertical", "worker-valid"],
-        paneLayout: { leader_share: 0.6, worker_tiling: "adaptive" },
-      },
-    });
-    expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-      "pane", "split", "--pane", "worker-valid",
-    ]));
-  });
-
   describe.each(["linear", "adaptive", "grid"] as const)("closed Worker panes (%s)", worker_tiling => {
-    const options = () => ({
-      name: "worker-new", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: {
-        leaderPaneId: "pane-leader", workerPaneIds: ["worker-a", "worker-b"],
-        paneLayout: { leader_share: 0.6, worker_tiling, worker_limit: 3 },
-      },
-    });
-    function placementReplies(present: string[]) {
-      const panes = [
-        { pane_id: "pane-leader", rect: { x: 0, y: 0, width: present.length ? 60 : 100, height: 60 } },
-        ...present.map(pane_id => ({ pane_id, rect: { x: 60, y: 0, width: 40, height: 60 } })),
-      ];
-      exec.mockImplementation((_command, args) => {
-        if (args[1] === "get") return panes.some(pane => pane.pane_id === args[2])
-          ? success({ pane: { pane_id: args[2], tab_id: "tab-a", workspace_id: "workspace-a" } })
-          : failure("pane_not_found", `pane ${args[2]} not found`);
-        if (args[1] === "layout") return success({ layout: { tab_id: "tab-a", workspace_id: "workspace-a", panes } });
-        if (args[1] === "split") return success({ pane: { pane_id: "worker-new" } });
-        if (args[1] === "rename") return renamed;
-        if (args[1] === "start") return readyStart("worker-new", "worker-new");
-        throw new Error(`Unexpected test command ${args.join(" ")}`);
-      });
-    }
-    it.each(["sync", "async"])("recovers from all Worker panes closed via the leader and starts (%s)", async mode => {
-      placementReplies([]);
-      const spawnOptions = options();
-      const pane = mode === "sync" ? adapter.prepareSpawn(spawnOptions) : await adapter.prepareSpawnAsync(spawnOptions);
-      expect(pane).toBe("worker-new");
-      expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-        "pane", "split", "--pane", "pane-leader", "--direction", "right", "--ratio", "0.6",
-      ]));
-      await expect(adapter.startPrepared(pane, spawnOptions)).resolves.toEqual({ state: "started", fact: "agent_start_accepted" });
-      expect(exec.mock.calls.filter(([, args]) => args[1] === "split")).toHaveLength(1);
-    });
-    it.each(["sync", "async"])("uses the present Worker when the last registered pane has closed (%s)", async mode => {
-      placementReplies(["worker-a"]);
-      const pane = mode === "sync" ? adapter.prepareSpawn(options()) : await adapter.prepareSpawnAsync(options());
-      expect(pane).toBe("worker-new");
-      expect(exec).toHaveBeenCalledWith("herdr", expect.arrayContaining([
-        "pane", "split", "--pane", "worker-a", "--direction", "down", "--ratio", "0.5",
-      ]));
+    it.each([{ present: [] as string[] }, { present: ["worker-a"] }])("uses only live registered candidates $present", async ({ present }) => {
+      panes = [rect("leader", present.length ? 60 : 100, 60, 0), ...present.map(id => rect(id, 40, 60))];
+      await adapter.prepareSpawn(options(["worker-a", "worker-b"], { ...adaptive, worker_tiling, worker_limit: 3 }));
+      expectSplit(present.length ? "worker-a" : "leader", present.length ? "down" : "right");
+      await expect(adapter.startPrepared("new", options())).resolves.toMatchObject({ state: "started" });
     });
     it.each([
-      ["pane-leader", failure("pane_not_found", "leader gone"), "pane_not_found"],
+      ["leader", failure("pane_not_found"), "pane_not_found"],
       ["worker-a", failure("permission_denied", "pane_not_found is diagnostic text only"), "permission_denied"],
-      ["worker-a", { stdout: "bad-json", stderr: "", status: 1 }, "malformed JSON"],
-      ["worker-a", { stdout: "bad-json", stderr: failure("pane_not_found", "closed").stderr, status: 1 }, "malformed JSON"],
-    ])("refuses query failure for %s without splitting", async (target, reply, message) => {
-      placementReplies(["worker-b"]);
-      const normal = exec.getMockImplementation()!;
-      exec.mockImplementation((command, args) => (args[1] === "get" && args[2] === target)
-        || (target === "pane-leader" && args[1] === "layout") ? reply : normal(command, args));
-      expect(() => adapter.prepareSpawn(options())).toThrow(message);
-      await expect(adapter.prepareSpawnAsync(options())).rejects.toThrow(message);
-      expect(exec.mock.calls.some(([, args]) => args[1] === "split")).toBe(false);
-    });
-    it("refuses a Worker query timeout without splitting", async () => {
-      placementReplies(["worker-b"]);
-      const run = vi.mocked(nodeHostEnv.exec.run);
+      ["worker-a", { kind: "exited", stdout: "bad-json", stderr: "", status: 1 }, "malformed JSON"],
+      ["worker-a", { kind: "exited", stdout: "bad-json", stderr: JSON.stringify({ error: { code: "pane_not_found" } }), status: 1 }, "malformed JSON"],
+      ["worker-a", { kind: "timeout", afterMs: 2000 }, "herdr_get_timeout"],
+    ] as const)("refuses %s query failure: %s", async (target, reply, message) => {
+      panes = [rect("leader", 60, 60, 0), rect("worker-b", 40, 60)];
       const normal = run.getMockImplementation()!;
-      run.mockImplementation((command, args, config) => args[1] === "get" && args[2] === "worker-a"
-        ? Promise.resolve({ kind: "timeout", afterMs: 2000 }) : normal(command, args, config));
-      await expect(adapter.prepareSpawnAsync(options())).rejects.toThrow("herdr_get_timeout");
-      expect(exec.mock.calls.some(([, args]) => args[1] === "split")).toBe(false);
+      run.mockImplementation(async (command, args, config) => (args[1] === "get" && args[2] === target) || (target === "leader" && args[1] === "layout") ? reply : normal(command, args, config));
+      await expect(adapter.prepareSpawn(options(["worker-a", "worker-b"], { ...adaptive, worker_tiling }))).rejects.toThrow(message);
+      expect(splitCalls()).toEqual([]);
     });
   });
-
-  it("preserves stderr error code and text for sync and async calls as typed facts", async () => {
-    exec.mockReturnValue(failure("pane_not_found", "pane worker not found"));
-    expect(() => adapter.renamePane("worker", "label")).toThrow(HerdrRequestError);
-    expect(() => adapter.renamePane("worker", "label")).toThrow("pane_not_found: pane worker not found");
-    await expect(adapter.prepareSpawnAsync({ name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).rejects.toMatchObject({ code: "pane_not_found", fact: "pane_not_found: pane worker not found" });
-    expect(adapter.isAlive("worker")).toBe(false);
-    expect(() => adapter.kill("worker")).not.toThrow();
-    exec.mockReturnValue(failure("server_unavailable", "pane_not_found is diagnostic text only"));
-    expect(() => adapter.isAlive("worker")).toThrow(HerdrRequestError);
-    expect(() => adapter.kill("worker")).toThrow("server_unavailable");
+  it("preserves structured error code and text without treating diagnostic text as absence", async () => {
+    run.mockResolvedValue(failure("pane_not_found", "pane worker not found"));
+    await expect(adapter.renamePane("worker", "label")).rejects.toBeInstanceOf(HerdrRequestError);
+    await expect(adapter.prepareSpawn(options())).rejects.toMatchObject({ code: "pane_not_found", fact: "pane_not_found: pane worker not found" });
+    expect(await adapter.isAlive("worker")).toBe(false); await adapter.kill("worker");
+    run.mockResolvedValue(failure("server_unavailable", "pane_not_found is diagnostic text only"));
+    await expect(adapter.isAlive("worker")).rejects.toThrow("server_unavailable"); await expect(adapter.kill("worker")).rejects.toThrow("server_unavailable");
   });
-
-  it("refuses a Worker pane moved to another leader tab", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-leader", tab_id: "tab-a", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-moved", tab_id: "tab-b", workspace_id: "w4" } }));
-
-    expect(() => adapter.spawn({
-      name: "worker-2", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-leader", workerPaneIds: ["pane-moved"] },
-    })).toThrow(/not in the leader tab/i);
-    expect(exec).not.toHaveBeenCalledWith("herdr", expect.arrayContaining(["split"]));
-  });
-
-  it("returns a receipt before retrying a warming shell on the same pane", async () => {
-    vi.useFakeTimers();
-    const sleep = vi.spyOn(nodeHostEnv.clock, "sleepSync").mockImplementation(() => {});
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin", 100))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(failure("agent_pane_busy", "agent target pane is not an available shell"))
-      .mockReturnValueOnce(readyStart("pane-worker", "worker"));
-
-    expect(adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toBe("pane-worker");
-    expect(exec).toHaveBeenCalledTimes(5);
-    expect(sleep).not.toHaveBeenCalled();
-    await vi.advanceTimersByTimeAsync(50);
-    expect(exec).toHaveBeenCalledTimes(6);
-    expect(exec.mock.calls[5][1]).toEqual(exec.mock.calls[4][1]);
-    vi.useRealTimers();
-  });
-
-  it("prepares asynchronously with bounded calls and preserves an ambiguous split", async () => {
-    const run = vi.mocked(nodeHostEnv.exec.run);
-    run.mockImplementation(async (_command, args, options) => {
-      expect(options?.timeoutMs).toBeGreaterThan(0);
-      expect(options?.timeoutMs).toBeLessThanOrEqual(2000);
-      if (args[1] === "layout") return { kind: "exited", ...leaderLayout("pane-origin", 100) };
-      if (args[1] === "get") return { kind: "exited", ...success({ pane: { pane_id: "pane-origin" } }) };
-      return { kind: "timeout", afterMs: options.timeoutMs };
+  it("keeps a split timeout ambiguous and never closes or starts another target", async () => {
+    const normal = run.getMockImplementation()!;
+    run.mockImplementation(async (command, args, config) => {
+      expect(config?.timeoutMs).toBeGreaterThan(0); expect(config?.timeoutMs).toBeLessThanOrEqual(2000);
+      return args[1] === "split" ? { kind: "timeout", afterMs: 2000 } : normal(command, args, config);
     });
-    await expect(adapter.prepareSpawnAsync({ name: "worker", cwd: "/repo", argv: ["pi"], env: {}, panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] } })).rejects.toThrow("herdr_split_timeout");
-    expect(exec).not.toHaveBeenCalled();
-    expect(run.mock.calls.filter(([, args]) => args[1] === "split")).toHaveLength(1);
-    expect(run.mock.calls.some(([, args]) => args[1] === "close" || args[1] === "start")).toBe(false);
+    await expect(adapter.prepareSpawn(options())).rejects.toThrow("herdr_split_timeout");
+    expect(splitCalls()).toHaveLength(1); expect(run.mock.calls.some(([, args]) => ["close", "start"].includes(args[1]))).toBe(false);
   });
-
-  it("retries only decisive busy on the same pane and never retries ambiguous start", async () => {
+  it("retries only decisive busy on the same pane within the warming-shell bound", async () => {
     vi.useFakeTimers();
-    try {
-      const run = vi.mocked(nodeHostEnv.exec.run);
-      run.mockResolvedValueOnce({ kind: "exited", ...failure("agent_pane_busy", "shell warming") })
-        .mockResolvedValueOnce({ kind: "exited", ...readyStart("pane-worker", "worker") });
-      const options = { name: "worker", cwd: "/repo", argv: ["pi"], env: { PI_TEAM_LAUNCH_ID: "launch-fixed" } };
-      const started = adapter.startPrepared("pane-worker", options);
-      await vi.advanceTimersByTimeAsync(50);
-      await expect(started).resolves.toMatchObject({ state: "started" });
-      expect(run.mock.calls[0]).toEqual(run.mock.calls[1]);
-      run.mockClear().mockResolvedValue({ kind: "timeout", afterMs: 2000 });
-      await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "unknown", fact: "timeout" });
-      await vi.advanceTimersByTimeAsync(6000);
-      expect(run).toHaveBeenCalledOnce();
-      run.mockClear().mockResolvedValue({ kind: "exited", ...failure("agent_pane_busy", "shell warming") });
-      const refused = adapter.startPrepared("pane-worker", options);
-      await vi.advanceTimersByTimeAsync(5000);
-      await expect(refused).resolves.toMatchObject({ state: "refused" });
-      expect(run.mock.calls.every(call => JSON.stringify(call) === JSON.stringify(run.mock.calls[0]))).toBe(true);
-    } finally { vi.useRealTimers(); }
+    run.mockResolvedValueOnce(failure("agent_pane_busy")).mockResolvedValueOnce(success(ready()));
+    const started = adapter.startPrepared("new", options());
+    await vi.advanceTimersByTimeAsync(50); await expect(started).resolves.toMatchObject({ state: "started" });
+    expect(run.mock.calls[0]).toEqual(run.mock.calls[1]);
+    run.mockClear().mockResolvedValue({ kind: "timeout", afterMs: 2000 });
+    await expect(adapter.startPrepared("new", options())).resolves.toEqual({ state: "unknown", fact: "timeout" });
+    await vi.advanceTimersByTimeAsync(6000); expect(run).toHaveBeenCalledOnce();
+    run.mockClear().mockResolvedValue(failure("agent_pane_busy"));
+    const refused = adapter.startPrepared("new", options()); await vi.advanceTimersByTimeAsync(5000);
+    await expect(refused).resolves.toMatchObject({ state: "refused" });
+    expect(run.mock.calls.every(call => JSON.stringify(call) === JSON.stringify(run.mock.calls[0]))).toBe(true);
   });
-
-  it.each(["", "  \n"])("preserves the real-Herdr-3 stderr readiness timeout with empty stdout %j and never retries", async stdout => {
-    const run = vi.mocked(nodeHostEnv.exec.run);
-    // Herdr 0.9.3 real-herdr-3 probe: nonzero exit, empty stdout, JSON error on stderr.
-    run.mockResolvedValue({ kind: "exited", status: 1, stdout,
-      stderr: '{"error":{"code":"timeout","message":"timed out waiting for agent startup"},"id":"cli:agent:start"}\n' });
-    await expect(adapter.startPrepared("pane-worker", { name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
-      .resolves.toEqual({ state: "unknown", fact: "timeout: timed out waiting for agent startup" });
+  it.each(["", "  \n"])("preserves stderr readiness timeout with empty stdout %j without retry", async stdout => {
+    run.mockResolvedValue({ kind: "exited", status: 1, stdout, stderr: JSON.stringify({ error: { code: "timeout", message: "timed out waiting for agent startup" } }) });
+    await expect(adapter.startPrepared("new", options())).resolves.toEqual({ state: "unknown", fact: "timeout: timed out waiting for agent startup" });
     expect(run).toHaveBeenCalledOnce();
-    expect(exec).not.toHaveBeenCalled();
   });
-
-  it("keeps decisive stderr refusals and never masks nonempty stdout with stderr", async () => {
-    const run = vi.mocked(nodeHostEnv.exec.run);
-    const options = { name: "worker", cwd: "/repo", argv: ["pi"], env: {} };
+  it("keeps decisive stderr refusal and never masks nonempty stdout", async () => {
     const stderr = JSON.stringify({ error: { code: "pane_not_found", message: "pane missing" } });
     run.mockResolvedValueOnce({ kind: "exited", status: 1, stdout: "", stderr });
-    await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "refused", fact: "pane_not_found: pane missing" });
-    run.mockResolvedValueOnce({ kind: "exited", ...readyStart("pane-worker", "worker"), stderr });
-    await expect(adapter.startPrepared("pane-worker", options)).resolves.toMatchObject({ state: "started" });
+    await expect(adapter.startPrepared("new", options())).resolves.toEqual({ state: "refused", fact: "pane_not_found: pane missing" });
+    run.mockResolvedValueOnce({ kind: "exited", status: 0, stdout: JSON.stringify({ result: ready() }), stderr });
+    await expect(adapter.startPrepared("new", options())).resolves.toMatchObject({ state: "started" });
     run.mockResolvedValueOnce({ kind: "exited", status: 1, stdout: "malformed", stderr });
-    await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "unknown", fact: "malformed_start_reply" });
-    run.mockResolvedValueOnce({ kind: "exited", status: 0, stdout: "", stderr: readyStart("pane-worker", "worker").stdout });
-    await expect(adapter.startPrepared("pane-worker", options)).resolves.toEqual({ state: "unknown", fact: "malformed_start_reply" });
-    expect(run).toHaveBeenCalledTimes(4);
+    await expect(adapter.startPrepared("new", options())).resolves.toMatchObject({ state: "unknown" });
+    run.mockResolvedValueOnce({ kind: "exited", status: 0, stdout: "", stderr: JSON.stringify({ result: ready() }) });
+    await expect(adapter.startPrepared("new", options())).resolves.toMatchObject({ state: "unknown" });
   });
-
-  it("keeps the pane when interactive recognition is unavailable", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(success({ type: "agent_started", argv: ["pi"], agent: {
-        pane_id: "pane-worker", terminal_id: "terminal-worker", name: "worker", interactive_ready: true,
-      } }))
-      .mockReturnValueOnce(success({ type: "ok" }));
-
-    expect(adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toBe("pane-worker");
-    expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
-    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
+  it.each([
+    { ...ready(), agent: { ...ready().agent, agent: undefined } },
+    { ...ready(), agent: { ...ready().agent, agent: "claude" } },
+    { ...ready(), argv: ["not-pi"] }, { ...ready(), agent: { ...ready().agent, pane_id: "wrong" } },
+    { ...ready(), agent: { ...ready().agent, name: "wrong" } },
+    { ...ready(), agent: { ...ready().agent, terminal_id: "" } },
+    { ...ready(), agent: { ...ready().agent, interactive_ready: false } },
+  ])("retains the exact pane on contradictory ready evidence %j", async result => {
+    const pane = await adapter.prepareSpawn(options()); run.mockClear().mockResolvedValue(success(result));
+    await expect(adapter.startPrepared(pane, options())).resolves.toEqual({ state: "unknown", fact: "malformed_start_reply" });
+    expect(run).toHaveBeenCalledOnce(); expect(run.mock.calls[0][1]).toContain(pane);
   });
-
-  it("keeps the pane when ready start reports a contradictory detected kind", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(success({ type: "agent_started", argv: ["pi"], agent: {
-        agent: "claude", pane_id: "pane-worker", terminal_id: "terminal-other", name: "worker", interactive_ready: true,
-      } }))
-      .mockReturnValueOnce(success({ type: "ok" }));
-
-    expect(adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toBe("pane-worker");
-    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
-    expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
+  it("rejects legacy commands, malformed replies and missing split identity", async () => {
+    await expect(adapter.prepareSpawn({ ...options(), argv: undefined, command: "pi" })).rejects.toThrow("structured argv");
+    run.mockResolvedValueOnce({ kind: "exited", status: 0, stdout: "not-json", stderr: "" });
+    await expect(adapter.prepareSpawn(options())).rejects.toThrow("malformed JSON");
+    const normal = run.getMockImplementation()!;
+    run.mockImplementation(async (command, args, config) => args[1] === "split" ? success({ pane: { terminal_id: "not-a-pane" } }) : normal(command, args, config));
+    await expect(adapter.prepareSpawn(options())).rejects.toThrow("pane.pane_id");
   });
-
-  it("keeps the exact pane for malformed ready argv or target evidence", () => {
-    const spawn = () => adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    });
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(success({ type: "agent_started", argv: ["not-pi"], agent: {
-        pane_id: "pane-worker", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
-      } }))
-      .mockReturnValueOnce(success({ type: "ok" }));
-    expect(spawn()).toBe("pane-worker");
-    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
-
-    exec.mockReset();
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker-2" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(success({ type: "agent_started", argv: ["pi"], agent: {
-        pane_id: "wrong-pane", terminal_id: "terminal-worker", name: "worker", launch_pending: true,
-      } }))
-      .mockReturnValueOnce(success({ type: "ok" }));
-    expect(spawn()).toBe("pane-worker-2");
-    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
-  });
-
-  it("rejects legacy shell commands and malformed or incomplete start envelopes", () => {
-    expect(() => adapter.spawn({
-      name: "worker", cwd: "/repo", command: "pi --model unsafe", env: {},
-    })).toThrow(/structured argv/i);
-
-    exec.mockReturnValue({ stdout: "not-json", stderr: "", status: 0 });
-    expect(() => adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    }))
-      .toThrow(/malformed JSON/i);
-
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { terminal_id: "not-a-pane" } }));
-    expect(() => adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toThrow(/pane\.pane_id/i);
-
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-origin" } }))
-      .mockReturnValueOnce(leaderLayout("pane-origin"))
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(renamed)
-      .mockReturnValueOnce(failure("agent_start_failed", "agent unavailable"))
-      .mockReturnValueOnce(success({ type: "ok" }));
-    expect(adapter.spawn({
-      name: "worker", cwd: "/repo", argv: ["pi"], env: {},
-      panePlacement: { leaderPaneId: "pane-origin", workerPaneIds: [] },
-    })).toBe("pane-worker");
-    expect(exec.mock.calls.some(([, args]) => args[0] === "pane" && args[1] === "close")).toBe(false);
-    expect(exec.mock.calls.filter(([, args]: [string, string[]]) => args[0] === "agent" && args[1] === "start")).toHaveLength(1);
-  });
-
-  it("closes non-final panes, refuses workspace deletion, and handles pane_not_found idempotently", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_list", panes: [{ pane_id: "pane-origin" }, { pane_id: "pane-worker" }] }))
-      .mockReturnValueOnce(success({ type: "ok" }));
-    expect(() => adapter.kill("pane-worker")).not.toThrow();
-    expect(exec).toHaveBeenNthCalledWith(1, "herdr", ["pane", "get", "pane-worker"]);
-    expect(exec).toHaveBeenNthCalledWith(2, "herdr", ["pane", "list", "--workspace", "w4"]);
-    expect(exec).toHaveBeenNthCalledWith(3, "herdr", ["pane", "close", "pane-worker"]);
-
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker", workspace_id: "w4" } }))
-      .mockReturnValueOnce(success({ type: "pane_list", panes: [{ pane_id: "pane-worker" }] }));
-    expect(() => adapter.kill("pane-worker")).toThrow(/last pane.*delete the workspace/i);
-
-    exec.mockReturnValueOnce(failure("pane_not_found", "pane worker not found"));
-    expect(() => adapter.kill("pane-worker")).not.toThrow();
-
-    exec.mockReturnValueOnce(failure("permission_denied", "not allowed"));
-    expect(() => adapter.kill("pane-worker")).toThrow(/permission_denied/i);
-  });
-
-  it("requires both pane presence and a live shell process, while distinguishing missing and errors", () => {
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(success({ type: "pane_process_info", process_info: { pane_id: "pane-worker", shell_pid: 4242 } }));
-    expect(adapter.isAlive("pane-worker")).toBe(true);
-    expect(exec).toHaveBeenNthCalledWith(1, "herdr", ["pane", "get", "pane-worker"]);
-    expect(exec).toHaveBeenNthCalledWith(2, "herdr", ["pane", "process-info", "--pane", "pane-worker"]);
-
-    exec
-      .mockReturnValueOnce(success({ type: "pane_info", pane: { pane_id: "pane-worker" } }))
-      .mockReturnValueOnce(success({ type: "pane_process_info", process_info: { pane_id: "pane-worker", shell_pid: null } }));
-    expect(adapter.isAlive("pane-worker")).toBe(false);
-
-    exec.mockReturnValueOnce(failure("pane_not_found", "pane worker not found"));
-    expect(adapter.isAlive("pane-worker")).toBe(false);
-
-    exec.mockReturnValueOnce(failure("server_unavailable", "socket disconnected"));
-    expect(() => adapter.isAlive("pane-worker")).toThrow(/server_unavailable/i);
-    expect(adapter.isAlive("")).toBe(false);
-  });
-
-  it("leaves Herdr pane and recognized-agent metadata unchanged during title projection", () => {
-    adapter.setTitle("team-a: worker");
-    vi.stubEnv("HERDR_PANE_ID", "");
-    adapter.setTitle("no target");
-    expect(exec).not.toHaveBeenCalled();
-  });
-
-  it("does not support separate OS windows", () => {
-    expect(adapter.supportsWindows()).toBe(false);
-    expect(() => adapter.spawnWindow({ name: "worker", cwd: "/repo", argv: ["pi"], env: {} }))
-      .toThrow(/does not support spawning separate OS windows/i);
-    expect(adapter.isWindowAlive("anything")).toBe(false);
+  it("leaves metadata unchanged during title projection and refuses separate windows", async () => {
+    adapter.setTitle("team: worker"); vi.stubEnv("HERDR_PANE_ID", ""); adapter.setTitle("no target"); expect(run).not.toHaveBeenCalled();
+    expect(adapter.supportsWindows()).toBe(false); expect(await adapter.isWindowAlive("anything")).toBe(false);
+    await expect(adapter.prepareWindow(options())).rejects.toThrow("does not support spawning separate OS windows");
   });
 });

@@ -88,21 +88,21 @@ describe("external behavior harness", () => {
     expect(child.running).toBe(true);
   });
 
-  it("records terminal requests and distinguishes carrier death from requested stop", () => {
+  it("records terminal requests and distinguishes carrier death from requested stop", async () => {
     const terminal = new FakeTerminalAdapter();
-    const pane = terminal.spawn({
+    const pane = await terminal.prepareSpawn({
       name: "worker",
       cwd: "/fixture",
       argv: ["pi", "--session", "fixture"],
       env: { PI_TEAM_NAME: "fixture-team" },
     });
-    expect(terminal.isAlive(pane)).toBe(true);
+    expect(await terminal.isAlive(pane)).toBe(true);
     terminal.crashPane(pane);
-    expect(terminal.isAlive(pane)).toBe(false);
+    expect(await terminal.isAlive(pane)).toBe(false);
     expect(terminal.operations.map((operation) => operation.kind)).toEqual(["spawn"]);
 
-    const replacement = terminal.spawn({ name: "worker", cwd: "/fixture", argv: ["pi"], env: {} });
-    terminal.kill(replacement);
+    const replacement = await terminal.prepareSpawn({ name: "worker", cwd: "/fixture", argv: ["pi"], env: {} });
+    await terminal.kill(replacement);
     expect(terminal.operations.map((operation) => operation.kind)).toEqual(["spawn", "spawn", "kill"]);
   });
 

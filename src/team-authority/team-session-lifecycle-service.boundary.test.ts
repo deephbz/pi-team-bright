@@ -27,7 +27,6 @@ vi.mock("../utils/runtime", () => ({
   verifyRuntimeGeneration: () => "unknown",
   readRuntimeStatus: async () => fixture.runtimeStatus,
   admitRuntimeStartup: (...args: unknown[]) => { fixture.events.push("runtime-claim"); return fixture.runtimeAdmission; },
-  probePidPresence: () => "occupied",
   writeRuntimeStatus: (...args: unknown[]) => { fixture.events.push("runtime-write"); return fixture.writeRuntime(...args); },
 }));
 vi.mock("../utils/teams", () => ({

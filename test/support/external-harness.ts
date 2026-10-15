@@ -240,25 +240,27 @@ export class FakeTerminalAdapter implements TerminalAdapter {
 
   currentTargetId(): string | null { return this.settings.currentTargetId === undefined ? "leader-pane" : this.settings.currentTargetId; }
   isDirectCarrier(): boolean { return this.settings.direct ?? true; }
-  detect(): boolean { return this.settings.detected ?? true; }
+  async detect(): Promise<boolean> { return this.settings.detected ?? true; }
+  async renamePane(_id: string, _label: string): Promise<void> {}
+  async startPrepared(): Promise<{ state: "started"; fact: string }> { return { state: "started", fact: "fixture_start" }; }
   supportsWindows(): boolean { return this.settings.windows ?? false; }
 
-  spawn(options: SpawnOptions): string {
+  async prepareSpawn(options: SpawnOptions): Promise<string> {
     const id = `pane-${++this.paneSequence}`;
     this.paneIds.add(id);
     this.operations.push({ kind: "spawn", id, options });
     return id;
   }
 
-  kill(id: string): void {
+  async kill(id: string): Promise<void> {
     this.paneIds.delete(id);
     this.operations.push({ kind: "kill", id });
   }
 
-  isAlive(id: string): boolean { return this.paneIds.has(id); }
+  async isAlive(id: string): Promise<boolean> { return this.paneIds.has(id); }
   setTitle(title: string): void { this.operations.push({ kind: "set_title", title }); }
 
-  spawnWindow(options: SpawnOptions): string {
+  async prepareWindow(options: SpawnOptions): Promise<string> {
     if (!this.supportsWindows()) throw new Error(`${this.name} does not support windows.`);
     const id = `window-${++this.windowSequence}`;
     this.windowIds.add(id);
@@ -266,12 +268,12 @@ export class FakeTerminalAdapter implements TerminalAdapter {
     return id;
   }
 
-  killWindow(id: string): void {
+  async killWindow(id: string): Promise<void> {
     this.windowIds.delete(id);
     this.operations.push({ kind: "kill_window", id });
   }
 
-  isWindowAlive(id: string): boolean { return this.windowIds.has(id); }
+  async isWindowAlive(id: string): Promise<boolean> { return this.windowIds.has(id); }
   setWindowTitle(id: string, title: string): void { this.operations.push({ kind: "set_window_title", id, title }); }
 
   /** Inject carrier death without recording an adapter-requested stop. */

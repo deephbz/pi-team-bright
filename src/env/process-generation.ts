@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { execFile, spawnSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import type { GenerationProbe } from "./host-env";
 
 export const MISSING_GENERATION_HELPER_MESSAGE = "The macOS process-generation helper is missing. Install Rust (rustc) and Xcode Command Line Tools, then run npm run build:process-generation in the installed @hypercarrier/pi-team-bright directory. Retry after the build.";
@@ -52,29 +52,4 @@ export async function probeProcessGenerations(pids: readonly number[]): Promise<
       resolve(new Map(unique.map(pid => [pid, error ? helperFailure(error) : parseReply(pid, lines.get(pid) ?? "")])));
     });
   });
-}
-
-export function probeProcessGeneration(pid: number): GenerationProbe {
-  if (!Number.isSafeInteger(pid) || pid <= 1) return { kind: "unknown", reason: "invalid_pid" };
-  try {
-    if (process.platform === "linux") {
-      let bootId: string;
-      try { bootId = fs.readFileSync("/proc/sys/kernel/random/boot_id", "utf8").trim(); }
-      catch { return { kind: "unknown", reason: "boot_identity_unavailable" }; }
-      const osBirthToken = linuxStartToken(fs.readFileSync(`/proc/${pid}/stat`, "utf8"));
-      return bootId && osBirthToken ? { kind: "found", generation: { pid, osBirthToken, bootId } }
-        : { kind: "unknown", reason: "malformed_proc_stat" };
-    }
-    if (process.platform === "darwin") {
-      const helper = path.resolve(__dirname, "../../native/bin/process-generation");
-      const result = spawnSync(helper, [String(pid)], { encoding: "utf8", timeout: 2000 });
-      if (result.error || result.status !== 0) return helperFailure(result.error);
-      return parseReply(pid, result.stdout);
-    }
-    return { kind: "unknown", reason: "generation_verifier_unavailable" };
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    return code === "ENOENT" || code === "ESRCH" ? { kind: "absent" }
-      : { kind: "unknown", reason: code ?? "generation_read_failed" };
-  }
 }

@@ -8,7 +8,7 @@ import { DurableModelToolBindings } from "../../src/model-tool-contract/durable-
 import { DurableModelToolTeamApplication } from "../../src/model-tool-contract/durable-model-tool-team-application";
 import { exactLeaderSessionId } from "../../src/model-tool-contract/model-tool-contracts";
 import { clearAdapterCache, setAdapter } from "../../src/adapters/terminal-registry";
-import type { TerminalAdapter } from "../../src/utils/terminal-adapter";
+import { terminalFixture } from "../../test/terminal-fixture";
 import * as paths from "../../src/utils/paths";
 import * as teams from "../../src/utils/teams";
 
@@ -25,20 +25,7 @@ async function team(defaultModel?: string) {
 
 function adapter() {
   const argv: string[][] = [];
-  const terminal: TerminalAdapter = {
-    name: "profile-retry",
-    isDirectCarrier: () => true,
-    detect: () => true,
-    spawn: () => "worker-pane",
-    kill() {},
-    isAlive: () => false,
-    setTitle() {},
-    supportsWindows: () => false,
-    spawnWindow: () => "worker-window",
-    setWindowTitle() {},
-    killWindow() {},
-    isWindowAlive: () => false,
-  };
+  const terminal = terminalFixture({ name: "profile-retry", prepareWindow: async () => "worker-window" });
   return { terminal, argv };
 }
 
@@ -89,7 +76,7 @@ describe("model role prepared retry", () => {
       cwd: process.cwd(),
       modelProfile: { alias: "review", provider: "fixture", model: "review-model", thinking: "high" },
     });
-    vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "absent" });
+    vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => new Map(pids.map(pid => [pid, { kind: "absent" }])));
     await writeRuntimeStatus(name, "review", { pid: 12345, startedAt: 1, osBirthToken: "old", bootId: "boot" }, first.membershipId);
     await bridge.completeLaunch(name, first.membershipId, first.member.launch!.launchId, { state: "refused", fact: "decisive current launch refusal" });
     await bridge.ensureWorker({ teamName: name, workerName: "review", scope: "Review profile", cwd: process.cwd() });

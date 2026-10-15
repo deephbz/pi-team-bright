@@ -1,3 +1,4 @@
+import { readProcessGeneration } from "../env/async-process-generation";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { RecipientDeliveryLifecycle, type RecipientDeliveryBinding, type RecipientDeliveryPair } from "./recipient-delivery-lifecycle";
@@ -31,7 +32,7 @@ async function fixture(failed: "alert" | "task") {
   await teams.ensureLogicalWorker(team, { name: "worker", scope: "Delivery isolation fixture." });
   await teams.addMember(team, { membershipId: "membership-worker", agentId: "worker-agent", name: "worker", agentType: "teammate", joinedAt: 1, tmuxPaneId: "", sessionFile: workerSession, cwd: "/project", subscriptions: [] });
   const member = await teams.currentMembership(team, "worker");
-  await writeRuntimeStatus(team, "worker", { pid: process.pid, ...ownBirthIdentity(), startedAt: 1, runState: "settled" }, member.membershipId);
+  await writeRuntimeStatus(team, "worker", { pid: process.pid, ...ownBirthIdentity(await readProcessGeneration(process.pid)), startedAt: 1, runState: "settled" }, member.membershipId);
   const accepted = await sendAlert({ teamName: team, from: "team-lead", to: "worker", kind: "clarification", text: "Clarify the evidence." }, membership, { appendAcceptedAlert: async () => ({ cursor: "0" }) });
   const publication = new DurableTaskMutationPublication();
   const graph = new DurableGraphTaskOrchestration(new DurableGraphTaskAuthority(), publication, publication, publication);
@@ -94,7 +95,7 @@ describe("delivery isolation with durable inboxes and runtime facts", () => {
     const result = await service.readTeamSync(leadSession, "updates", new AbortController().signal, "sync");
     expect(result).toMatchObject({ kind: "unsettled", workers: [{ name: "worker", reason: "delivery_degraded", delivery_degraded: [{ engine: "task" }] }] });
     service.clearPending(leadSession);
-    const view = deriveCarrierView(fx.member, await readRuntimeStatus(team, "worker"));
+    const view = deriveCarrierView(fx.member, await readRuntimeStatus(team, "worker"), Date.now(), await readProcessGeneration(process.pid));
     expect(formatCarrierStatus(view).line).toContain("task delivery degraded (start: Task authority unavailable");
     const message = projectToolTuiMessage({ tool: "team_sync", expanded: false, details: { kind: "unsettled", head: 0, epoch_id: "epoch", workers: result.kind === "unsettled" ? result.workers : [] } });
     expect(message.body?.join("\n")).toContain("Task authority unavailable");

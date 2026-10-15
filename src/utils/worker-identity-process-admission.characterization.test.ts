@@ -187,7 +187,7 @@ describe("registered Worker identity and process-admission characterization", ()
     vi.stubEnv("PI_TEAM_NAME", teamName);
     vi.stubEnv("PI_AGENT_NAME", "worker");
     vi.stubEnv("PI_AGENT_LAUNCH_ID", launchId);
-    const probe = vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "found", generation: { pid: 47_001, osBirthToken: "old", bootId: "boot" } });
+    const probe = vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => new Map(pids.map(pid => [pid, { kind: "found", generation: { pid, osBirthToken: "old", bootId: "boot" } }])));
     const refused = context(sessionFile);
     await sessionStartHandler()({ reason: "startup" }, refused);
 
@@ -197,9 +197,9 @@ describe("registered Worker identity and process-admission characterization", ()
     expect(stillPrepared).toMatchObject({ membershipId, pendingLaunchId: launchId });
     expect(stillPrepared.sessionFile).toBeUndefined();
     expect(teamEvents.readTeamEvents(teamName, { eventTypes: ["worker"] }).events).toEqual([]);
-    expect(probe).toHaveBeenCalledWith(47_001);
+    expect(probe).toHaveBeenCalledWith(expect.arrayContaining([47_001]));
 
-    probe.mockImplementation(pid => pid === 47_001 ? { kind: "absent" } : { kind: "found", generation: { pid, osBirthToken: "new", bootId: "boot" } });
+    probe.mockImplementation(async pids => new Map(pids.map(pid => [pid, pid === 47_001 ? { kind: "absent" } : { kind: "found", generation: { pid, osBirthToken: "new", bootId: "boot" } }])));
     const recovered = context(sessionFile);
     await sessionStartHandler()({ reason: "startup" }, recovered);
 

@@ -11,11 +11,9 @@ import type { Member, TeamConfig, TerminalTarget } from "./contracts";
 import { removeWorkerAggregate, type QualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
 import { resolveWorkerModelRole, type ModelRoleSettings } from "../utils/model-role-settings";
 import { normalizeWorkerCarrier, planWorkerEnsure, type WorkerRecoveryMode } from "../utils/worker-ensure-lifecycle";
-import { HerdrAdapter } from "../adapters/herdr-adapter";
-import { Iterm2Adapter } from "../adapters/iterm2-adapter";
 import { memberTerminalTarget, terminalTarget } from "../utils/terminal-target";
 import { teamPanePlacement } from "../utils/team-pane-placement";
-import { currentTerminalForTeamAsync } from "../utils/team-terminal";
+import { currentTerminalForTeam } from "../utils/team-terminal";
 import type { SpawnOptions } from "../utils/terminal-adapter";
 import { withSemanticTrace } from "../utils/trace";
 import type { TeamLifecyclePublication, WorkerStartupObservation } from "./team-lifecycle-publication";
@@ -112,7 +110,7 @@ export class WorkerLaunchBridge {
   private async claim(request: WorkerLaunchRequest, observe: (member: Member) => void): Promise<LaunchClaim | WorkerLaunchResult> {
     const config = await teams.readConfig(request.teamName);
     if (config.separateWindows) {
-      const terminal = await currentTerminalForTeamAsync(config);
+      const terminal = await currentTerminalForTeam(config);
       assertLockDeadline();
       if (!terminal.supportsWindows()) throw new Error(`Separate windows mode is not supported in ${terminal.name}.`);
     }
@@ -161,7 +159,7 @@ export class WorkerLaunchBridge {
   private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number, observePane: (paneId: string) => void): Promise<WorkerLaunchResult> {
     const { member, config } = claim;
     const launchId = member.launch!.launchId;
-    const terminal = await currentTerminalForTeamAsync(config);
+    const terminal = await currentTerminalForTeam(config);
     assertLockDeadline();
     const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(member.cwd);
     const exactResume = claim.recoveryMode === "exact_session_resume";
@@ -174,12 +172,8 @@ export class WorkerLaunchBridge {
     try {
       if (request.initialMessage) await request.initialMessage();
       assertLockDeadline();
-      if (terminal instanceof Iterm2Adapter) {
-        const last = options.panePlacement?.workerPaneIds.at(-1);
-        terminal.setSpawnContext(last?.startsWith("iterm_") ? { lastSessionId: last.replace("iterm_", "") } : {});
-      }
-      const terminalId = terminal instanceof HerdrAdapter ? await terminal.prepareSpawnAsync(options, deadline)
-        : config.separateWindows ? terminal.spawnWindow(options) : terminal.spawn(options);
+      const terminalId = config.separateWindows ? await terminal.prepareWindow(options)
+        : await terminal.prepareSpawn(options, deadline);
       target = { terminalId, isWindow: !!config.separateWindows, backend: terminal.name };
       observePane(terminalId);
       assertLockDeadline();
@@ -189,7 +183,7 @@ export class WorkerLaunchBridge {
         await teams.updateMembership(request.teamName, member.membershipId!, { terminalTarget: terminalTarget(terminal.name, target!.isWindow ? "window" : "pane", terminalId) });
       });
       assertLockDeadline();
-      const completion = terminal instanceof HerdrAdapter ? terminal.startPrepared(terminalId, options) : Promise.resolve({ state: "started" as const, fact: "carrier_start_accepted" });
+      const completion = terminal.startPrepared(terminalId, options);
       void completion.then(result => this.completeLaunch(request.teamName, member.membershipId!, launchId, result))
         .catch(() => this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: "completion_unavailable" })).catch(() => undefined);
     } catch (error) {

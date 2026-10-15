@@ -1,3 +1,4 @@
+import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
@@ -18,21 +19,9 @@ function name(suffix: string): string {
 }
 
 function adapter(backend: string, currentTargetId = "surface-current", direct = true): TerminalAdapter {
-  return {
-    name: backend,
-    detect: vi.fn(() => true),
-    currentTargetId: () => currentTargetId,
-    isDirectCarrier: () => direct,
-    spawn: () => "surface-worker",
-    kill() {},
-    isAlive: () => true,
-    setTitle() {},
-    supportsWindows: () => false,
-    spawnWindow: () => { throw new Error("unsupported"); },
-    setWindowTitle() {},
-    killWindow() {},
-    isWindowAlive: () => false,
-  };
+  return terminalFixture({ name: backend, detect: vi.fn(async () => true),
+    currentTargetId: () => currentTargetId, isDirectCarrier: () => direct,
+    prepareSpawn: async () => "surface-worker", isAlive: async () => true });
 }
 
 async function createBoundTeam(teamName: string, backend: string, leadTargetId = "surface-lead") {
@@ -93,40 +82,37 @@ describe("Team terminal backend binding", () => {
     })).rejects.toThrow(/does not match.*herdr/i);
   });
 
-  it("resolves persisted lifecycle operations by backend ID without redetection", () => {
+  it("resolves persisted lifecycle operations by backend ID without redetection", async () => {
     const persisted = adapter("herdr");
     setAdapter(persisted);
     const config = { name: "bound", terminalBackend: "herdr", members: [] } as any;
-
-    expect(terminalForTeam(config)).toBe(persisted);
+    expect(await terminalForTeam(config)).toBe(persisted);
     expect(persisted.detect).not.toHaveBeenCalled();
   });
 
-  it("refuses spawning or resume from a different current backend", () => {
+  it("refuses spawning or resume from a different current backend", async () => {
     setAdapter(adapter("tmux"));
     vi.stubEnv("HERDR_ENV", "");
     vi.stubEnv("HERDR_PANE_ID", "");
     vi.stubEnv("HERDR_TAB_ID", "");
     const config = { name: "bound", terminalBackend: "herdr", members: [] } as any;
-
-    expect(() => currentTerminalForTeam(config)).toThrow(/Herdr launch requires a direct pane-local Team carrier/i);
+    await expect(currentTerminalForTeam(config)).rejects.toThrow(/Herdr launch requires a direct pane-local Team carrier/i);
   });
 
-  it("refuses launch from a nested carrier even when its backend identity matches", () => {
+  it("refuses launch from a nested carrier even when its backend identity matches", async () => {
     setAdapter(adapter("herdr", "w4:p9", false));
     const config = { name: "bound", terminalBackend: "herdr", members: [] } as any;
-
-    expect(() => currentTerminalForTeam(config)).toThrow(/Herdr launch requires a direct pane-local Team carrier/i);
+    await expect(currentTerminalForTeam(config)).rejects.toThrow(/Herdr launch requires a direct pane-local Team carrier/i);
   });
 
-  it("refuses ambient lifecycle dispatch for terminal-bound legacy Teams", () => {
+  it("refuses ambient lifecycle dispatch for terminal-bound legacy Teams", async () => {
     setAdapter(adapter("tmux"));
     const config = {
       name: "legacy",
       members: [{ name: "worker", tmuxPaneId: "%4" }],
     } as any;
 
-    expect(() => terminalForTeam(config)).toThrow(/predates terminalBackend.*ambient backend dispatch/i);
+    await expect(terminalForTeam(config)).rejects.toThrow(/predates terminalBackend.*ambient backend dispatch/i);
   });
 
   it("refuses a window target on a pane-only backend", async () => {

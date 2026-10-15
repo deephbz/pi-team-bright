@@ -1,3 +1,4 @@
+import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -60,7 +61,7 @@ function registerExtension(): Map<string, RegisteredTool> {
 }
 
 async function createGraphTeam(name: string, leadSession: string) {
-  return teams.createTeam(name, leadSession, "lead", undefined, undefined, undefined, undefined, terminalBinding());
+  return teams.createTeam(name, leadSession, "lead", undefined, undefined, undefined, undefined, await terminalBinding());
 }
 
 /**
@@ -68,8 +69,8 @@ async function createGraphTeam(name: string, leadSession: string) {
  * so lifecycle operations resolve it from durable authority instead of ambient
  * detection. Members keep legacy pane IDs to retain legacy-read coverage.
  */
-function terminalBinding(): teams.TeamTerminalBinding | undefined {
-  const detected = getTerminalAdapter();
+async function terminalBinding(): Promise<teams.TeamTerminalBinding | undefined> {
+  const detected = await getTerminalAdapter();
   return detected ? { backend: detected.name, leadTarget: { backend: detected.name, kind: "pane", targetId: "pane-leader" } } : undefined;
 }
 
@@ -89,23 +90,10 @@ describe("Team topology/lifecycle lease", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const spawned: string[] = [];
     const killed: string[] = [];
-    const terminal: TerminalAdapter = {
-      name: "topology-contract-terminal",
-      isDirectCarrier: () => true,
-      detect: () => true,
-      spawn: (options) => {
-        spawned.push(options.name);
-        return `pane-${options.name}`;
-      },
-      kill: (paneId) => { killed.push(paneId); },
-      isAlive: () => false,
-      setTitle() {},
-      supportsWindows: () => false,
-      spawnWindow: () => "unused",
-      setWindowTitle() {},
-      killWindow() {},
-      isWindowAlive: () => false,
-    };
+    const terminal = terminalFixture({ name: "topology-contract-terminal",
+      prepareSpawn: async options => { spawned.push(options.name); return `pane-${options.name}`; },
+      kill: async paneId => { killed.push(paneId); },
+    });
     setAdapter(terminal);
 
     const name = uniqueTeam("shutdown-spawn");
@@ -185,20 +173,9 @@ describe("Team topology/lifecycle lease", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const killed: string[] = [];
     const alive = new Set(["pane-uncertain", "pane-fails"]);
-    setAdapter({
-      name: "lifecycle-characterization-terminal",
-      isDirectCarrier: () => true,
-      detect: () => true,
-      spawn: () => "unused",
-      kill: (paneId) => { killed.push(paneId); },
-      isAlive: (paneId) => alive.has(paneId),
-      setTitle() {},
-      supportsWindows: () => false,
-      spawnWindow: () => "unused",
-      setWindowTitle() {},
-      killWindow() {},
-      isWindowAlive: () => false,
-    });
+    setAdapter(terminalFixture({ name: "lifecycle-characterization-terminal",
+      kill: async paneId => { killed.push(paneId); }, isAlive: async paneId => alive.has(paneId),
+    }));
     const name = uniqueTeam("public-lifecycle");
     const leadSession = `/tmp/${name}-lead.jsonl`;
     await createGraphTeam(name, leadSession);
@@ -331,20 +308,7 @@ describe("Team topology/lifecycle lease", () => {
 
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    setAdapter({
-      name: "unused",
-      isDirectCarrier: () => true,
-      detect: () => true,
-      spawn: () => "unused",
-      kill() {},
-      isAlive: () => false,
-      setTitle() {},
-      supportsWindows: () => false,
-      spawnWindow: () => "unused",
-      setWindowTitle() {},
-      killWindow() {},
-      isWindowAlive: () => false,
-    });
+    setAdapter(terminalFixture({ name: "unused" }));
     const tools = registerExtension();
     const invalid = await tools.get("team_create")!.execute(
       "create-empty",

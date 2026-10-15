@@ -8,10 +8,9 @@ import { vi } from "vitest";
 // native verifier tests invoke the native adapter directly.
 vi.mock("../src/env/host-env", async importOriginal => {
   const module = await importOriginal<typeof import("../src/env/host-env")>();
-  module.nodeHostEnv.process.generation = pid => pid === process.pid
+  module.nodeHostEnv.process.generations = async pids => new Map(pids.map(pid => [pid, pid === process.pid
     ? { kind: "found", generation: { pid, osBirthToken: "fixture-birth", bootId: "fixture-boot" } }
-    : { kind: "unknown", reason: "unit_fixture_unconfigured_pid" };
-  module.nodeHostEnv.process.generations = async function (pids) { return new Map(pids.map(pid => [pid, this.generation(pid)])); };
+    : { kind: "unknown", reason: "unit_fixture_unconfigured_pid" }]));
   return module;
 });
 

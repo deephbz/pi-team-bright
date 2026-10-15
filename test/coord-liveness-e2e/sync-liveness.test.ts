@@ -169,7 +169,7 @@ describe("hardened coordination liveness boundaries", () => {
     const name = teamName("runtime");
     const config = await teams.createTeam(name, "leader-session", "lead");
     const current = member();
-    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => ({ kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }));
+    vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => new Map(pids.map(pid => [pid, { kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }])));
     await writeRuntimeStatus(name, "worker", { pid: process.pid, osBirthToken: "birth", bootId: "boot", startedAt: 1, runState: "active" }, current.membershipId);
     await expect(readWorkerRunObservation(name, current, livenessQueries)).resolves.toMatchObject({ state: "active", actuationPending: false });
     await writeRuntimeStatus(name, "worker", { runState: "settled" }, current.membershipId);

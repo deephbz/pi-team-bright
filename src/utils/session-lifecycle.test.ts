@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readProcessGeneration } from "../env/async-process-generation";
 import fs from "node:fs";
 import piTeams from "../../extensions/index";
 import * as paths from "./paths";
@@ -80,7 +81,7 @@ describe("Pi session lifecycle", () => {
       subscriptions: [],
     };
     await teams.addMember(teamName, worker);
-    await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(), startedAt: 1, ready: true }, worker.membershipId);
+    await runtime.writeRuntimeStatus(teamName, "worker", { pid: process.pid, ...runtime.ownBirthIdentity(await readProcessGeneration(process.pid)), startedAt: 1, ready: true }, worker.membershipId);
     const beforeRuntime = fs.readFileSync(paths.runtimeStatusPath(teamName, "worker"), "utf8");
     const beforeMember = (await teams.currentMembership(teamName, "worker"));
     vi.stubEnv("PI_TEAM_NAME", teamName);

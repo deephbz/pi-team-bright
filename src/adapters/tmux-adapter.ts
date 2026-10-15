@@ -6,10 +6,10 @@ import { hostEnv, nodeHostEnv } from "../env/host-env";
  */
 
 import { execSync } from "node:child_process";
-import { TerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../utils/terminal-adapter";
+import { SynchronousTerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../utils/terminal-adapter";
 import { DEFAULT_TEAM_PANE_LAYOUT } from "../utils/team-pane-layout";
 
-export class TmuxAdapter implements TerminalAdapter {
+export class TmuxAdapter implements SynchronousTerminalAdapter {
   readonly name = "tmux";
 
   isDirectCarrier(): boolean {

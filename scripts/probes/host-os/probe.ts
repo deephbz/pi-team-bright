@@ -4,7 +4,7 @@ import { spawn, spawnSync, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { probeProcessGeneration, probeProcessGenerations, linuxStartToken } from "../../../src/env/process-generation";
+import { probeProcessGenerations, linuxStartToken } from "../../../src/env/process-generation";
 import { writeJsonAtomicAsync } from "../../../src/utils/atomic-json";
 import { withLock } from "../../../src/utils/lock";
 
@@ -32,16 +32,16 @@ async function a7() {
     const victim = spawn("sleep", ["600"], { stdio: "ignore" });
     const pid = victim.pid!;
     await sleep(50);
-    const before = probeProcessGeneration(pid);
+    const before = (await probeProcessGenerations([pid])).get(pid)!;
     const ref = refStat(pid);
     const diedAt = Date.now();
     victim.kill("SIGKILL");
     await new Promise(r => victim.once("exit", r));
     await waitGone(pid);
-    const afterDeath = probeProcessGeneration(pid);
+    const afterDeath = (await probeProcessGenerations([pid])).get(pid)!;
     const wrap = execFileSync(path.join(here, "pidwrap"), [String(pid), "16", "600"], { encoding: "utf8" }).trim().split(" ");
     const reusedAt = Date.now();
-    const after = probeProcessGeneration(pid);
+    const after = (await probeProcessGenerations([pid])).get(pid)!;
     const newcomerRef = fs.existsSync(`/proc/${pid}`) ? refStat(pid) : undefined;
     const batch = Object.fromEntries(await probeProcessGenerations([pid, process.pid]));
     if (wrap[0] === "found") { try { process.kill(pid, "SIGKILL"); } catch {} }
@@ -56,7 +56,7 @@ async function a7() {
   // A comm with spaces and ')' must not shift field 22.
   const tricky = spawn("python3", ["-I", "-c", "import ctypes,time; ctypes.CDLL(None).prctl(15, b'a) b (c 1 2', 0, 0, 0); time.sleep(30)"], { stdio: "ignore" });
   await sleep(300);
-  const trickyProbe = probeProcessGeneration(tricky.pid!);
+  const trickyProbe = (await probeProcessGenerations([tricky.pid!])).get(tricky.pid!)!;
   const trickyStat = fs.readFileSync(`/proc/${tricky.pid}/stat`, "utf8");
   const trickyRef = refStat(tricky.pid!);
   tricky.kill("SIGKILL");
@@ -64,15 +64,15 @@ async function a7() {
   const zombieParent = spawn("python3", ["-I", "-c", "import os,sys,time\nc=os.fork()\nif c==0: os._exit(0)\nprint(c, flush=True); time.sleep(30)"], { stdio: ["ignore", "pipe", "ignore"] });
   const zombiePid = Number(await new Promise<string>(r => zombieParent.stdout!.once("data", d => r(String(d).trim()))));
   await sleep(200);
-  const zombie = { pid: zombiePid, state: refStat(zombiePid).state, probe: probeProcessGeneration(zombiePid) };
+  const zombie = { pid: zombiePid, state: refStat(zombiePid).state, probe: (await probeProcessGenerations([zombiePid])).get(zombiePid)! };
   zombieParent.kill("SIGKILL");
   // A process owned by another user (root) stays readable unless hidepid is set.
   const rootPid = Number(execFileSync("pgrep", ["-o", "-u", "root", "systemd-journal"], { encoding: "utf8" }).trim());
-  const foreignUser = { pid: rootPid, probe: probeProcessGeneration(rootPid) };
+  const foreignUser = { pid: rootPid, probe: (await probeProcessGenerations([rootPid])).get(rootPid)! };
   const checks = (trials as any[]).every(t => Object.values(t.checks).every(Boolean))
     && trickyProbe.kind === "found" && trickyProbe.generation.osBirthToken === trickyRef.starttime && foreignUser.probe.kind === "found";
   return { assumption: "Linux /proc/<pid>/stat starttime changes on pid reuse.", verdict: checks ? "holds" : "refuted",
-    command: "node probe.cjs a7 (production probeProcessGeneration/probeProcessGenerations; pidwrap forces reuse)",
+    command: "node probe.cjs a7 (production probeProcessGenerations; pidwrap forces reuse)",
     observed: { environment, trials, trickyComm: { stat: trickyStat.slice(0, 40), probe: trickyProbe, reference: trickyRef.starttime, parser: linuxStartToken(trickyStat) },
       zombie, foreignUser,
       scope: "Process reuse after a full PID wrap on one boot. starttime has CLK_TCK resolution; a reuse inside one tick is not reachable by wrap at this pid_max and is not tested. A zombie reads as found until reaped." } };

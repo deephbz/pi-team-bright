@@ -95,8 +95,6 @@ it.each(["absent", "found", "unknown"] as const)("journals one legacy attention 
     : kind === "unknown" ? { kind, reason: "generation_helper_missing" } : { kind }]))) as any;
   await runWithHostEnv(host, async () => {
     delete f.status.osBirthToken;
-    host.process.generation = () => kind === "found" ? { kind, generation: { pid: 42, osBirthToken: "birth", bootId: "boot" } }
-      : kind === "unknown" ? { kind, reason: "generation_helper_missing" } : { kind };
     const notify = vi.fn();
     let observer = new CarrierObserver("team", notify); observer.start(); await observer.refresh(); await observer.refresh(); observer.stop();
     observer = await running(); await observer.refresh();
@@ -149,7 +147,6 @@ it.each([17, 50])("batches %i Coordination runtime reads through one async provi
   const host = env();
   const generations = vi.fn(host.process.generations);
   host.process.generations = generations;
-  host.process.generation = () => { throw new Error("sync generation reached"); };
   await runWithHostEnv(host, async () => {
     const query = new DurableCoordinationTeamRuntimeQuery();
     const results = await Promise.all(Array.from({ length: count }, () => query.readRuntime("team", f.member)));
@@ -159,8 +156,8 @@ it.each([17, 50])("batches %i Coordination runtime reads through one async provi
   });
 });
 it("retries predecessor exit publication without duplicate accepted death", async () => {
-  const host = env(); host.process.generation = () => ({ kind: "absent" });
-  host.process.generations = async pids => new Map(pids.map(pid => [pid, host.process.generation(pid)]));
+  const host = env();
+  host.process.generations = async pids => new Map(pids.map(pid => [pid, { kind: "absent" }]));
   await runWithHostEnv(host, async () => {
     f.appendFailures = 1;
     await expect(publishPredecessorExit("team", f.member, f.status, "herdr")).rejects.toThrow("EIO");
@@ -172,11 +169,11 @@ it("retries predecessor exit publication without duplicate accepted death", asyn
   });
 });
 it("refuses predecessor publication without verified death or matching runtime coordinates", async () => {
-  const host = env(); host.process.generation = () => ({ kind: "unknown", reason: "offline" });
-  host.process.generations = async pids => new Map(pids.map(pid => [pid, host.process.generation(pid)]));
+  const host = env();
+  host.process.generations = async pids => new Map(pids.map(pid => [pid, { kind: "unknown", reason: "offline" }]));
   await runWithHostEnv(host, async () => {
     await expect(publishPredecessorExit("team", f.member, f.status, "herdr")).rejects.toThrow("not verified");
-    host.process.generation = () => ({ kind: "absent" });
+    host.process.generations = async pids => new Map(pids.map(pid => [pid, { kind: "absent" }]));
     await expect(publishPredecessorExit("team", f.member, { ...f.status, startedAt: 5 }, "herdr")).rejects.toThrow("coordinates changed");
     expect(f.events).toEqual([]);
   });

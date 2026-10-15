@@ -7,7 +7,7 @@ const readConfig = vi.hoisted(() => vi.fn(async () => ({ terminalBackend: "herdr
 const currentMembership = vi.hoisted(() => vi.fn(async () => ({ membershipId: fixture.membershipId, sessionFile: fixture.bound ? "session" : undefined,
   terminalTarget: { backend: "herdr", kind: "pane", targetId: "exact-pane" } })));
 vi.mock("../utils/teams", () => ({ readConfig, currentMembership }));
-vi.mock("../utils/team-terminal", () => ({ terminalForTeamAsync: async () => ({ name: "herdr", isAlive }) }));
+vi.mock("../utils/team-terminal", () => ({ terminalForTeam: async () => ({ name: "herdr", isAlive }) }));
 vi.mock("../utils/runtime", () => ({
   readRuntimeStatus: async () => ({}),
   runtimeGeneration: () => ({ membershipId: "membership", pid: 42, startedAt: 100 }),

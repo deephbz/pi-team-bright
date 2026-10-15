@@ -1,3 +1,4 @@
+import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -51,11 +52,11 @@ function context(sessionFile: string) {
 function adapter(options: { alive?: boolean; name?: string } = {}) {
   const spawn = vi.fn((_options: any) => "pane-worker");
   const kill = vi.fn();
-  const terminal: TerminalAdapter = {
-    name: options.name ?? "launch-contract-terminal", isDirectCarrier: () => true, detect: () => true,
-    spawn, kill, isAlive: vi.fn(() => options.alive ?? false), setTitle() {},
-    supportsWindows: () => false, spawnWindow: () => "window-worker", setWindowTitle() {}, killWindow() {}, isWindowAlive: () => false,
-  };
+  const terminal = terminalFixture({
+    name: options.name ?? "launch-contract-terminal", currentTargetId: () => null,
+    prepareSpawn: async options => spawn(options), kill,
+    isAlive: vi.fn(async () => options.alive ?? false), prepareWindow: async () => "window-worker",
+  });
   return { terminal, spawn, kill };
 }
 function register(terminal: TerminalAdapter): Map<string, RegisteredTool> {
@@ -215,8 +216,12 @@ describe("receipt-first Worker launch", () => {
     const member = await prepared(f.name, "herdr");
     await teams.bindMemberSession(f.name, "worker", "/tmp/herdr-recovery.jsonl", member.pendingLaunchId, {}, member.membershipId);
     await runtime.writeRuntimeStatus(f.name, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, member.membershipId);
-    const generation = nodeHostEnv.process.generation;
-    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => pid === 2_147_483_647 ? { kind: "absent" } : generation(pid));
+    const generations = nodeHostEnv.process.generations;
+    vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => {
+      const results = await generations(pids);
+      if (pids.includes(2_147_483_647)) results.set(2_147_483_647, { kind: "absent" });
+      return results;
+    });
     const service = bridge(); const receipt = await service.ensureWorker(request(f.name));
     expect(receipt).toMatchObject({ action: "recovered", recoveryMode: "exact_session_resume", startup: { observed: false } });
     await settledLaunch(f.name, "started");

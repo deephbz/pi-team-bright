@@ -6,9 +6,9 @@ import { hostEnv } from "../env/host-env";
  * Note: Zellij uses --close-on-exit, so explicit kill is not needed.
  */
 
-import { TerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../utils/terminal-adapter";
+import { SynchronousTerminalAdapter, SpawnOptions, execCommand, shellCommand } from "../utils/terminal-adapter";
 
-export class ZellijAdapter implements TerminalAdapter {
+export class ZellijAdapter implements SynchronousTerminalAdapter {
   readonly name = "zellij";
 
   isDirectCarrier(): boolean {

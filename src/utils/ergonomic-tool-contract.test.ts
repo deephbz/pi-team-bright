@@ -1,3 +1,4 @@
+import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import { nodeHostEnv } from "../env/host-env";
 import { parseObservationContent } from "../coordination/observation-content";
@@ -56,8 +57,12 @@ function context(sessionFile: string, cwd = process.cwd()) {
 }
 
 beforeEach(() => {
-  const generation = nodeHostEnv.process.generation;
-  vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => pid === 2_147_483_647 ? { kind: "absent" } : generation(pid));
+  const generations = nodeHostEnv.process.generations;
+  vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => {
+    const results = await generations(pids);
+    if (pids.includes(2_147_483_647)) results.set(2_147_483_647, { kind: "absent" });
+    return results;
+  });
   const agentDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-team-bright-model-role-fixture-"));
   createdAgentDirs.push(agentDir);
   const promptPath = path.join(agentDir, "worker.md");
@@ -103,21 +108,10 @@ async function startSession(tools: ReturnType<typeof registerTools>, ctx: Return
 }
 
 function terminal(): TerminalAdapter {
-  return {
-    name: "ergonomic-contract-terminal",
-    isDirectCarrier: () => true,
-    detect: () => true,
-    currentTargetId: () => "pane-leader",
-    spawn: (options: { name: string }) => `pane-${options.name}`,
-    kill() {},
-    isAlive: () => false,
-    setTitle() {},
-    supportsWindows: () => false,
-    spawnWindow: () => "window-unused",
-    setWindowTitle() {},
-    killWindow() {},
-    isWindowAlive: () => false,
-  };
+  return terminalFixture({
+    name: "ergonomic-contract-terminal", currentTargetId: () => "pane-leader",
+    prepareSpawn: async options => `pane-${options.name}`, prepareWindow: async () => "window-unused",
+  });
 }
 
 /**
@@ -125,8 +119,8 @@ function terminal(): TerminalAdapter {
  * so lifecycle operations resolve it from durable authority instead of ambient
  * detection. Members still carry legacy pane IDs to keep that read covered.
  */
-function createBoundTeam(name: string, leadSession: string, separateWindows?: boolean) {
-  const detected = getTerminalAdapter();
+async function createBoundTeam(name: string, leadSession: string, separateWindows?: boolean) {
+  const detected = await getTerminalAdapter();
   return teams.createTeam(
     name,
     leadSession,
@@ -328,7 +322,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const workerSession = `/tmp/${team}-worker.jsonl`;
     let sessionBinding: Promise<unknown> | undefined;
     const livePrepared = terminal();
-    livePrepared.spawn = () => {
+    livePrepared.prepareSpawn = async () => {
       sessionBinding = (async () => {
         const prepared = await teams.currentMembership(team, "worker");
         await teams.bindMemberSession(team, "worker", workerSession, prepared.pendingLaunchId, {}, prepared.membershipId);
@@ -336,7 +330,7 @@ describe("ergonomic agent-facing Team contracts", () => {
       })();
       return "pane-worker";
     };
-    livePrepared.isAlive = (paneId) => paneId === "pane-worker";
+    livePrepared.isAlive = async (paneId) => paneId === "pane-worker";
     setAdapter(livePrepared);
     await createBoundTeam(team, leadSession);
     const tools = registerTools();
@@ -409,7 +403,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     let bindWorker!: () => Promise<void>;
     const adapter: TerminalAdapter = {
       ...terminal(),
-      spawn: () => {
+      prepareSpawn: async () => {
         bindWorker = async () => {
           const prepared = await teams.currentMembership(team, "worker");
           const bound = await teams.bindMemberSession(
@@ -438,7 +432,7 @@ describe("ergonomic agent-facing Team contracts", () => {
         };
         return "pane-worker";
       },
-      isAlive: (paneId) => paneId === "pane-worker",
+      isAlive: async (paneId) => paneId === "pane-worker",
     };
     setAdapter(adapter);
     await createBoundTeam(team, leadSession);
@@ -464,13 +458,13 @@ describe("ergonomic agent-facing Team contracts", () => {
   it("uses the Team window policy for every new Worker", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    const spawnWindow = vi.fn(() => "window-worker");
+    const spawnWindow = vi.fn(async () => "window-worker");
     const adapter: TerminalAdapter = {
       ...terminal(),
       supportsWindows: () => true,
-      spawn: () => { throw new Error("Team window policy was ignored"); },
-      spawnWindow,
-      isWindowAlive: (windowId) => windowId === "window-worker",
+      prepareSpawn: async () => { throw new Error("Team window policy was ignored"); },
+      prepareWindow: spawnWindow,
+      isWindowAlive: async (windowId) => windowId === "window-worker",
     };
     setAdapter(adapter);
     const team = uniqueTeam("worker-team-window-policy");
@@ -492,11 +486,11 @@ describe("ergonomic agent-facing Team contracts", () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_TEAM_BRIGHT_SHIPPED_EXTENSION", "/private/exact-team-extension.ts");
-    const spawn = vi.fn((_options: any) => "pane-retried");
+    const spawn = vi.fn(async (_options: any) => "pane-retried");
     const adapter: TerminalAdapter = {
       ...terminal(),
-      spawn,
-      isAlive: (paneId) => paneId === "pane-retried",
+      prepareSpawn: spawn,
+      isAlive: async (paneId) => paneId === "pane-retried",
     };
     setAdapter(adapter);
     const team = uniqueTeam("worker-retry-prepared");
@@ -682,11 +676,11 @@ describe("ergonomic agent-facing Team contracts", () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     vi.stubEnv("PI_AGENT_LAUNCH_ID", "stale-parent-launch");
-    const spawn = vi.fn((_options: any) => "pane-recovered");
+    const spawn = vi.fn(async (_options: any) => "pane-recovered");
     const adapter: TerminalAdapter = {
       ...terminal(),
-      spawn,
-      isAlive: (paneId) => paneId === "pane-recovered",
+      prepareSpawn: spawn,
+      isAlive: async (paneId) => paneId === "pane-recovered",
     };
     setAdapter(adapter);
     const team = uniqueTeam("worker-recover");
@@ -766,15 +760,15 @@ describe("ergonomic agent-facing Team contracts", () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const live = new Set<string>();
-    const kill = vi.fn((paneId: string) => live.delete(paneId));
+    const kill = vi.fn(async (paneId: string) => { live.delete(paneId); });
     const adapter: TerminalAdapter = {
       ...terminal(),
-      spawn: vi.fn(() => {
+      prepareSpawn: vi.fn(async () => {
         live.add("pane-recovery-attempt");
         return "pane-recovery-attempt";
       }),
       kill,
-      isAlive: (paneId) => live.has(paneId),
+      isAlive: async (paneId) => live.has(paneId),
     };
     setAdapter(adapter);
     const team = uniqueTeam("worker-recover-compensate");
@@ -829,9 +823,9 @@ describe("ergonomic agent-facing Team contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const adapter: TerminalAdapter = {
       ...terminal(),
-      spawn: vi.fn(() => "pane-still-live"),
+      prepareSpawn: vi.fn(async () => "pane-still-live"),
       kill: vi.fn(),
-      isAlive: (paneId) => paneId === "pane-still-live",
+      isAlive: async (paneId) => paneId === "pane-still-live",
     };
     setAdapter(adapter);
     const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
@@ -878,9 +872,9 @@ describe("ergonomic agent-facing Team contracts", () => {
     vi.stubEnv("PI_TEAM_NAME", "");
     const adapter: TerminalAdapter = {
       ...terminal(),
-      spawn: vi.fn(() => "pane-prepared-live"),
+      prepareSpawn: vi.fn(async () => "pane-prepared-live"),
       kill: vi.fn(),
-      isAlive: (paneId) => paneId === "pane-prepared-live",
+      isAlive: async (paneId) => paneId === "pane-prepared-live",
     };
     setAdapter(adapter);
     const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");

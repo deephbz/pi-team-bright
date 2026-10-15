@@ -1,3 +1,4 @@
+import { readProcessGeneration } from "../env/async-process-generation";
 import fs from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAlertSender } from "./alerts";
@@ -22,7 +23,7 @@ beforeEach(async () => {
   await teams.createTeam(team, "/sessions/lead.jsonl", "lead-agent", "Test Alert receipts");
   await teams.addMember(team, { membershipId: binding.membershipId, agentId: "worker-agent", name: "worker", agentType: "teammate", joinedAt: 1, tmuxPaneId: "", sessionFile, cwd: "/project", subscriptions: [] });
   config = await teams.readConfig(team);
-  await runtime.writeRuntimeStatus(team, "worker", { pid: process.pid, startedAt: 1, ...runtime.ownBirthIdentity() }, binding.membershipId);
+  await runtime.writeRuntimeStatus(team, "worker", { pid: process.pid, startedAt: 1, ...runtime.ownBirthIdentity(await readProcessGeneration(process.pid)) }, binding.membershipId);
 });
 afterEach(() => {
   vi.restoreAllMocks();

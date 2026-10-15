@@ -1,3 +1,5 @@
+import { mockGenerations } from "../../test/process-fixture";
+import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import { nodeHostEnv } from "../env/host-env";
 import os from "node:os";
@@ -75,7 +77,7 @@ function registerSessionExtension(): Map<string, (...args: any[]) => any> {
 }
 
 async function createBeadsTeam(name: string, leadSession: string) {
-  return teams.createTeam(name, leadSession, "lead-agent", undefined, undefined, undefined, undefined, terminalBinding());
+  return teams.createTeam(name, leadSession, "lead-agent", undefined, undefined, undefined, undefined, await terminalBinding());
 }
 
 /**
@@ -83,8 +85,8 @@ async function createBeadsTeam(name: string, leadSession: string) {
  * so lifecycle operations resolve it from durable authority instead of ambient
  * detection. Members keep legacy pane IDs to retain legacy-read coverage.
  */
-function terminalBinding(): teams.TeamTerminalBinding | undefined {
-  const detected = getTerminalAdapter();
+async function terminalBinding(): Promise<teams.TeamTerminalBinding | undefined> {
+  const detected = await getTerminalAdapter();
   return detected ? { backend: detected.name } : undefined;
 }
 
@@ -141,23 +143,13 @@ describe("release P1 public contracts", () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
     const killed: string[] = [];
-    const adapter: TerminalAdapter = {
-      name: "contract-terminal",
-      isDirectCarrier: () => true,
-      detect: () => true,
-      spawn: () => "unused",
-      kill: (paneId) => {
+    const adapter = terminalFixture({ name: "contract-terminal",
+      kill: async paneId => {
         killed.push(paneId);
         if (paneId === "pane-fails") throw new Error("simulated terminal kill failure");
       },
-      isAlive: (paneId) => paneId === "pane-fails",
-      setTitle() {},
-      supportsWindows: () => false,
-      spawnWindow: () => "unused",
-      setWindowTitle() {},
-      killWindow() {},
-      isWindowAlive: () => true,
-    };
+      isAlive: async paneId => paneId === "pane-fails", isWindowAlive: async () => true,
+    });
     setAdapter(adapter);
     const name = teamName("partial-shutdown");
     const leadSession = `/tmp/${name}-lead.jsonl`;
@@ -183,20 +175,8 @@ describe("release P1 public contracts", () => {
   ])("fails closed when %s cannot stop its synthetic pane", async (adapterName, paneId) => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    const adapter: TerminalAdapter = {
-      name: adapterName,
-      isDirectCarrier: () => true,
-      detect: () => true,
-      spawn: () => "unused",
-      kill() {},
-      isAlive: () => true,
-      setTitle() {},
-      supportsWindows: () => adapterName === "Windows Terminal",
-      spawnWindow: () => "unused",
-      setWindowTitle() {},
-      killWindow() {},
-      isWindowAlive: () => true,
-    };
+    const adapter = terminalFixture({ name: adapterName, isAlive: async () => true,
+      supportsWindows: () => adapterName === "Windows Terminal", isWindowAlive: async () => true });
     setAdapter(adapter);
     const name = teamName(`unsupported-stop-${adapterName.replace(/[^a-z0-9]+/gi, "-")}`);
     const leadSession = `/tmp/${name}-lead.jsonl`;
@@ -234,9 +214,12 @@ describe("release P1 public contracts", () => {
       pid: 2_147_483_647, startedAt: Date.now(),
       osBirthToken: "synthetic-stopped-generation", bootId: "synthetic-boot",
     }, worker.membershipId);
-    const generation = nodeHostEnv.process.generation;
-    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid =>
-      pid === 2_147_483_647 ? { kind: "absent" } : generation(pid));
+    const generations = nodeHostEnv.process.generations;
+    vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => {
+      const results = await generations(pids);
+      if (pids.includes(2_147_483_647)) results.set(2_147_483_647, { kind: "absent" });
+      return results;
+    });
     const tool = registerExtension().get("worker_stop")!;
 
     const result = await tool.execute("shutdown", {
@@ -259,7 +242,7 @@ describe("release P1 public contracts", () => {
     const oldPid = 2_147_483_647;
     const newPid = 2_147_483_646;
     await runtime.writeRuntimeStatus(name, "worker", { pid: oldPid, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
-    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => {
+    mockGenerations(pid => {
       if (pid === oldPid) {
         fs.writeFileSync(paths.runtimeStatusPath(name, "worker"), JSON.stringify({
           teamName: name,
@@ -299,8 +282,12 @@ describe("release P1 public contracts", () => {
     const worker = member("worker", workerSession);
     await teams.addMember(name, worker);
     await runtime.writeRuntimeStatus(name, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
-    const generation = nodeHostEnv.process.generation;
-    vi.spyOn(nodeHostEnv.process, "generation").mockImplementation(pid => pid === 2_147_483_647 ? { kind: "absent" } : generation(pid));
+    const generations = nodeHostEnv.process.generations;
+    vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => {
+      const results = await generations(pids);
+      if (pids.includes(2_147_483_647)) results.set(2_147_483_647, { kind: "absent" });
+      return results;
+    });
     const handlers = registerSessionExtension();
 
     let releaseLease!: () => void;
@@ -339,20 +326,7 @@ describe("release P1 public contracts", () => {
   it("rejects an exited PID record owned by a different Membership generation", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");
-    const adapter: TerminalAdapter = {
-      name: "Zellij",
-      isDirectCarrier: () => true,
-      detect: () => true,
-      spawn: () => "unused",
-      kill() {},
-      isAlive: () => true,
-      setTitle() {},
-      supportsWindows: () => false,
-      spawnWindow: () => "unused",
-      setWindowTitle() {},
-      killWindow() {},
-      isWindowAlive: () => true,
-    };
+    const adapter = terminalFixture({ name: "Zellij", isAlive: async () => true, isWindowAlive: async () => true });
     setAdapter(adapter);
     const name = teamName("wrong-generation-runtime");
     const leadSession = `/tmp/${name}-lead.jsonl`;

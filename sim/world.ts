@@ -104,10 +104,10 @@ export class SimWorld {
           ...variables,
         },
         pidExists: pid => this.processes.exists(pid),
-        generation: pid => this.faults.get("generation")?.mode === "unavailable" ? { kind: "unknown", reason: "injected_generation_unavailable" } : this.processes.generation(pid),
         generations: pids => {
-          const samples = new Map<number, GenerationProbe>(pids.map(pid => [pid, env.process.generation(pid)]));
           const fault = this.faults.get("generation");
+          const samples = new Map<number, GenerationProbe>(pids.map(pid => [pid, fault?.mode === "unavailable"
+            ? { kind: "unknown", reason: "injected_generation_unavailable" } : this.processes.generation(pid)]));
           if (fault?.source !== "generation" || fault.mode !== "slow") return Promise.resolve(samples);
           return new Promise(resolve => this.enqueue(actor, "generation.completion", () => resolve(samples), fault.delayMs ?? 100));
         },

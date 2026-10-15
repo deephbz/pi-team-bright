@@ -1,20 +1,20 @@
 import { expect, it, vi } from "vitest";
 import { nodeHostEnv, runWithHostEnv, type GenerationProbe } from "./host-env";
-import { readProcessGeneration } from "./async-process-generation";
+import { readProcessGeneration, readProcessGenerations } from "./async-process-generation";
 
 it.each([17, 50])("coalesces %i same-turn PID reads without blocking or a synchronous probe", async count => {
   let finish!: (value: Map<number, GenerationProbe>) => void;
   const generations = vi.fn(() => new Promise<Map<number, GenerationProbe>>(resolve => { finish = resolve; }));
-  const generation = vi.fn((): GenerationProbe => { throw new Error("sync verifier reached"); });
-  const host = { ...nodeHostEnv, process: { ...nodeHostEnv.process, generation, generations } };
+  const host = { ...nodeHostEnv, process: { ...nodeHostEnv.process, generations } };
   await runWithHostEnv(host, async () => {
     const pids = Array.from({ length: count }, (_, i) => 100 + i);
     const reads = Promise.all([...pids, pids[0]].map(readProcessGeneration));
+    const batch = readProcessGenerations(pids);
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(generations).toHaveBeenCalledOnce(); expect(generations).toHaveBeenCalledWith(pids);
-    expect(generation).not.toHaveBeenCalled();
     finish(new Map(pids.map(pid => [pid, { kind: "found", generation: { pid, osBirthToken: String(pid), bootId: "boot" } }])));
     expect((await reads).every(probe => probe.kind === "found")).toBe(true);
+    expect((await batch).size).toBe(count);
   });
 });
 

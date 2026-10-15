@@ -8,7 +8,7 @@ import { writeRuntimeStatus } from "../utils/runtime";
 import { nodeHostEnv } from "../env/host-env";
 import { HerdrAdapter } from "../adapters/herdr-adapter";
 import { WorkerLaunchBridge } from "./worker-launch-bridge";
-vi.mock("../utils/team-terminal", () => ({ currentTerminalForTeamAsync: async () => terminal }));
+vi.mock("../utils/team-terminal", () => ({ currentTerminalForTeam: async () => terminal }));
 vi.mock("../utils/team-pane-placement", () => ({ teamPanePlacement: () => ({ leaderPaneId: "leader", workerPaneIds: [] }) }));
 const terminal = new HerdrAdapter();
 const created: string[] = [];
@@ -26,11 +26,11 @@ it("returns within ten seconds while the real Membership claim lease stays conte
   const f = await fixture();
   await teams.addMember(f.name, { membershipId: "membership", name: "worker", agentId: "worker", agentType: "teammate", joinedAt: 1, cwd: "/fixture", subscriptions: [], sessionFile: "/fixture/worker.jsonl", isActive: true });
   await writeRuntimeStatus(f.name, "worker", { pid: process.pid, startedAt: 1, osBirthToken: "birth", bootId: "boot" }, "membership");
-  vi.spyOn(nodeHostEnv.process, "generation").mockReturnValue({ kind: "found", generation: { pid: process.pid, osBirthToken: "birth", bootId: "boot" } });
+  vi.spyOn(nodeHostEnv.process, "generations").mockImplementation(async pids => new Map(pids.map(pid => [pid, { kind: "found", generation: { pid, osBirthToken: "birth", bootId: "boot" } }])));
   const acquired = deferred(); const release = deferred();
   const lease = teams.withMembershipMutationLease(f.name, "membership", async () => { acquired.resolve(); await release.promise; });
   await acquired.promise;
-  const split = vi.spyOn(terminal, "prepareSpawnAsync"); const start = vi.spyOn(terminal, "startPrepared");
+  const split = vi.spyOn(terminal, "prepareSpawn"); const start = vi.spyOn(terminal, "startPrepared");
   vi.useFakeTimers(); const before = Date.now(); const receipt = f.bridge.ensureWorker(f.request);
   await vi.advanceTimersByTimeAsync(10000);
   expect(await receipt).toMatchObject({ action: "attention", reason: "receipt_deadline", nextActionHint: "ask_human" });
@@ -40,7 +40,7 @@ it("returns within ten seconds while the real Membership claim lease stays conte
 });
 it.each([false, true])("bounds post-split target CAS and fences later reconciliation (successor=%s)", async successor => {
   const f = await fixture(); const release = deferred(); const acquired = deferred(); let lease!: Promise<void>;
-  vi.spyOn(terminal, "prepareSpawnAsync").mockImplementation(async () => {
+  vi.spyOn(terminal, "prepareSpawn").mockImplementation(async () => {
     const member = await teams.currentMembership(f.name, "worker");
     lease = withLockDeadline(Infinity, () => teams.withMembershipMutationLease(f.name, member.membershipId!, async () => {
       acquired.resolve(); await release.promise;

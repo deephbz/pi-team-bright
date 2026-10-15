@@ -38,12 +38,27 @@ export interface SpawnOptions {
   panePlacement?: TeamPanePlacement;
 }
 
-/**
- * Terminal Adapter Interface
- * 
- * Implementations provide terminal-specific logic for pane management.
- */
+/** Registry contract. Preparation and process start remain separate lifecycle steps. */
 export interface TerminalAdapter {
+  readonly name: string;
+  currentTargetId(): string | null;
+  isDirectCarrier(): boolean;
+  detect(): Promise<boolean>;
+  renamePane(paneId: string, label: string): Promise<void>;
+  prepareSpawn(options: SpawnOptions, deadline?: number): Promise<string>;
+  prepareWindow(options: SpawnOptions): Promise<string>;
+  startPrepared(targetId: string, options: SpawnOptions): Promise<{ state: "started" | "refused" | "unknown"; fact: string }>;
+  kill(paneId: string): Promise<void>;
+  /** Only decisive absence returns false; unavailable evidence throws. */
+  isAlive(paneId: string): Promise<boolean>;
+  setTitle(title: string): void;
+  supportsWindows(): boolean;
+  killWindow(windowId: string): Promise<void>;
+  isWindowAlive(windowId: string): Promise<boolean>;
+}
+
+/** Existing one-stage backends. Only the registry adapts this implementation interface. */
+export interface SynchronousTerminalAdapter {
   /** Stable backend identifier persisted by a Team epoch. */
   readonly name: string;
 
@@ -55,7 +70,6 @@ export interface TerminalAdapter {
 
   /** Set a presentation label on an exact pane without changing its identity. */
   renamePane?(paneId: string, label: string): void;
-  renamePaneAsync?(paneId: string, label: string): Promise<void>;
 
   /**
    * Whether this process is directly carried by this backend rather than by a
@@ -71,8 +85,6 @@ export interface TerminalAdapter {
    * @returns true if this terminal should be used
    */
   detect(): boolean;
-  /** Bounded nonblocking companion; legacy backends can keep synchronous detection. */
-  detectAsync?(): Promise<boolean>;
 
   /**
    * Spawn a new terminal pane with the given options.
@@ -90,7 +102,6 @@ export interface TerminalAdapter {
    * @param paneId - The pane ID returned from spawn()
    */
   kill(paneId: string): void;
-  killAsync?(paneId: string): Promise<void>;
 
   /**
    * Check if a terminal pane is still alive/active.
@@ -99,8 +110,6 @@ export interface TerminalAdapter {
    * @returns true if pane exists and is active
    */
   isAlive(paneId: string): boolean;
-  /** Only decisive absence returns false; unavailable evidence throws. */
-  isAliveAsync?(paneId: string): Promise<boolean>;
 
   /**
    * Set the title of the current terminal pane/window.
