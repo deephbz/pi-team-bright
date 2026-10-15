@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
-import { GraphTaskController } from "../task-authority/graph-control";
+import { GraphTaskController, GraphSnapshotValidator } from "../task-authority/graph-control";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { readGraphTaskCards, readGraphTaskCoordinates, withGraphReadView } from "./graph-read-view";
 import { graphTaskAuthorityPath, teamDir } from "./paths";
@@ -123,6 +123,18 @@ it("keeps mutation and commit checks fresh even with a warm read memo", async ()
   expect(recover).toHaveBeenCalledTimes(4);
   await expect(authority.transition(team, { operationId: "stale", taskId: before.id, expectedVersion: before.version as TaskVersionRef, transition: "claim", worker: "worker" })).rejects.toThrow("changed");
   expect(recover).toHaveBeenCalledTimes(5);
+});
+it("reuses revision validation only for reads while writes and commit checks stay full", async () => {
+  const authority = await fixture();
+  const task = (await authority.readTasks(team))[0]!;
+  const validate = vi.spyOn(GraphSnapshotValidator.prototype as any, "validateRevision");
+  await authority.transition(team, { operationId: "context", taskId: task.id, expectedVersion: task.version as TaskVersionRef, currentContext: "New context" });
+  expect(validate).toHaveBeenCalledTimes(1);
+  validate.mockClear();
+  await authority.readTasks(team);
+  expect(validate).not.toHaveBeenCalled();
+  readGraphTaskCoordinates(team);
+  expect(validate).toHaveBeenCalledTimes(1);
 });
 it("refuses corruption at commit even if metadata appears unchanged", async () => {
   const authority = await fixture();

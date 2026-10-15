@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import { GraphControlRefusal, GraphTaskController, type GraphControlSnapshot } from "../task-authority/graph-control";
+import { GraphControlRefusal, GraphTaskController, GraphSnapshotValidator, type GraphControlSnapshot } from "../task-authority/graph-control";
 import { GraphSnapshotCorruption } from "../task-authority/graph-authority-errors";
 import type { GraphTaskCard } from "../task-authority/graph-control-schemas";
 import { projectGraphTaskCards } from "../task-authority/graph-card";
@@ -14,17 +14,19 @@ const scope = new AsyncLocalStorage<ReadScope>();
 // One Team per process. Retain only the immutable current projection, never
 // controllers, raw snapshots, historical revisions, events or replay receipts.
 let memo: { file: string; view: ReadView } | undefined;
+let validationMemo: { file: string; validator: GraphSnapshotValidator } | undefined;
 
 function identity(file: string): string {
   try {
     const stat = fs.statSync(file, { bigint: true });
     if (!stat.isFile() || stat.ino <= 0n || stat.mtimeNs <= 0n || stat.ctimeNs <= 0n) throw new Error("Graph authority file identity is unavailable.");
     return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(":");
-  } catch (error) { memo = undefined; throw error; }
+  } catch (error) { memo = undefined; validationMemo = undefined; throw error; }
 }
 function assertCurrent(file: string, view: ReadView): void {
   if (identity(file) !== view.identity) {
     memo = undefined;
+    validationMemo = undefined;
     throw new Error("Graph authority changed during observation; retry the operation.");
   }
 }
@@ -71,10 +73,15 @@ function readView(teamName: string): ReadView {
   else {
     memo = undefined;
     let sourceSha256 = "";
-    const controller = recoverGraphController(teamName, text => { sourceSha256 = createHash("sha256").update(text).digest("hex"); });
+    const validator = validationMemo?.file === file ? validationMemo.validator : new GraphSnapshotValidator(true);
+    let controller: GraphTaskController;
+    try {
+      controller = recoverGraphController(teamName, text => { sourceSha256 = createHash("sha256").update(text).digest("hex"); }, validator);
+    } catch (error) { validationMemo = undefined; throw error; }
     view = freeze({ identity: before, sourceSha256, tasks: projectGraphTaskCards(controller), readyIds: controller.selectReadyFrontier().map(task => task.id) });
     assertCurrent(file, view);
     memo = { file, view };
+    validationMemo = { file, validator };
   }
   if (active) active.views.set(file, view);
   return view;
@@ -99,10 +106,10 @@ export function readGraphTaskCoordinates(teamName: string, mode: "observation" |
 /** Full validation remains mandatory for every recovered authority. */
 export function loadGraphController(teamName: string): GraphTaskController {
   try { return recoverGraphController(teamName); }
-  catch (error) { memo = undefined; throw error; }
+  catch (error) { memo = undefined; validationMemo = undefined; throw error; }
 }
 
-function recoverGraphController(teamName: string, onSource?: (text: string) => void): GraphTaskController {
+function recoverGraphController(teamName: string, onSource?: (text: string) => void, validation?: GraphSnapshotValidator): GraphTaskController {
   const file = graphTaskAuthorityPath(teamName);
   if (!fs.existsSync(file)) throw missingGraphAuthority(teamName);
   let snapshot: GraphControlSnapshot;
@@ -128,7 +135,7 @@ function recoverGraphController(teamName: string, onSource?: (text: string) => v
     throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot contains removed Task model selection fields; migration is not supported.");
   }
   try {
-    return GraphTaskController.recover(snapshot);
+    return GraphTaskController.recover(snapshot, undefined, validation);
   } catch (error) {
     throw new GraphSnapshotCorruption(`Graph authority snapshot cannot be recovered: ${error instanceof Error ? error.message : String(error)}`);
   }
