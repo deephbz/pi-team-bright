@@ -260,21 +260,117 @@ function parseEvent(line: string, lineNumber: number): TeamEvent {
   return value as TeamEvent;
 }
 
-function readJournal(teamName: string): TeamEvent[] {
-  const journal = teamEventJournalPath(teamName);
-  if (!fs.existsSync(journal)) return [];
-  const raw = fs.readFileSync(journal, "utf8");
+interface JournalReadCache {
+  device: number;
+  inode: number;
+  byteOffset: number;
+  modifiedAt: number;
+  changedAt: number;
+  endsWithNewline: boolean;
+  events: TeamEvent[];
+  lastCursor: bigint;
+}
+
+const JOURNAL_READ_CACHE_LIMIT = 32;
+const journalReadCache = new Map<string, JournalReadCache>();
+
+function cacheJournalRead(journal: string, cache: JournalReadCache): void {
+  journalReadCache.delete(journal);
+  journalReadCache.set(journal, cache);
+  while (journalReadCache.size > JOURNAL_READ_CACHE_LIMIT) {
+    journalReadCache.delete(journalReadCache.keys().next().value!);
+  }
+}
+
+function parseJournalLines(raw: string, priorEvents: readonly TeamEvent[] = [], priorCursor?: bigint): TeamEvent[] {
+  const events = [...priorEvents];
+  let previous = priorCursor ?? (events.length ? parseCursor(events.at(-1)!.cursor) : 0n);
   const lines = raw.split("\n").filter((line) => line.length > 0);
-  let previous = 0n;
-  return lines.map((line, index) => {
-    const event = parseEvent(line, index + 1);
+  for (const line of lines) {
+    const event = parseEvent(line, events.length + 1);
     const cursor = parseCursor(event.cursor);
     if (cursor <= previous) {
-      throw new Error(`Malformed Team event journal at line ${index + 1}: cursors must increase monotonically.`);
+      throw new Error(`Malformed Team event journal at line ${events.length + 1}: cursors must increase monotonically.`);
     }
     previous = cursor;
-    return event;
-  });
+    events.push(event);
+  }
+  return events;
+}
+
+function readRange(fd: number, start: number, length: number): Buffer {
+  const bytes = Buffer.alloc(length);
+  let offset = 0;
+  while (offset < length) {
+    const count = fs.readSync(fd, bytes, offset, length - offset, start + offset);
+    if (count === 0) throw new Error("Team event journal changed while it was being read.");
+    offset += count;
+  }
+  return bytes;
+}
+
+/** Read and validate new journal bytes once, then reuse the parsed image by cursor. */
+function readJournal(teamName: string): TeamEvent[] {
+  const journal = teamEventJournalPath(teamName);
+  if (!fs.existsSync(journal)) {
+    journalReadCache.delete(journal);
+    return [];
+  }
+  const fd = fs.openSync(journal, "r");
+  try {
+    const stat = fs.fstatSync(fd);
+    const cached = journalReadCache.get(journal);
+    if (cached) cacheJournalRead(journal, cached);
+    const sameFile = !!cached && cached.device === stat.dev && cached.inode === stat.ino;
+    if (cached && sameFile && stat.size >= cached.byteOffset) {
+      if (stat.size === cached.byteOffset && stat.mtimeMs === cached.modifiedAt && stat.ctimeMs === cached.changedAt) return cached.events;
+      if (stat.size > cached.byteOffset && cached.endsWithNewline) {
+        try {
+          const appended = readRange(fd, cached.byteOffset, stat.size - cached.byteOffset);
+          const events = parseJournalLines(appended.toString("utf8"), cached.events, cached.lastCursor);
+          const tail = appended.at(-1) ?? 0;
+          const result: JournalReadCache = {
+            device: stat.dev,
+            inode: stat.ino,
+            byteOffset: stat.size,
+            modifiedAt: stat.mtimeMs,
+            changedAt: stat.ctimeMs,
+            endsWithNewline: tail === 10,
+            events,
+            lastCursor: events.length ? parseCursor(events.at(-1)!.cursor) : 0n,
+          };
+          cacheJournalRead(journal, result);
+          return events;
+        } catch (error) {
+          journalReadCache.delete(journal);
+          throw error;
+        }
+      }
+      // Same-size rewrites and appends after a valid unterminated event are
+      // ambiguous. Revalidate the complete image rather than extending cache.
+    }
+
+    try {
+      const raw = readRange(fd, 0, stat.size);
+      const events = parseJournalLines(raw.toString("utf8"));
+      cacheJournalRead(journal, {
+        device: stat.dev,
+        inode: stat.ino,
+        byteOffset: stat.size,
+        modifiedAt: stat.mtimeMs,
+        changedAt: stat.ctimeMs,
+        endsWithNewline: stat.size === 0 || raw.at(-1) === 10,
+        events,
+        lastCursor: events.length ? parseCursor(events.at(-1)!.cursor) : 0n,
+      });
+      return events;
+    } catch (error) {
+      journalReadCache.delete(journal);
+      throw error;
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
 }
 
 function readJournalTailCursor(teamName: string): bigint {
@@ -392,6 +488,17 @@ export function projectTaskEventEvidence(event: TeamEvent): ProjectedTaskEventEv
   };
 }
 
+function firstEventAfter(events: readonly TeamEvent[], cursor: bigint): number {
+  let low = 0;
+  let high = events.length;
+  while (low < high) {
+    const middle = low + Math.floor((high - low) / 2);
+    if (parseCursor(events[middle].cursor) <= cursor) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
 /** Non-consuming read: each caller owns its supplied cursor. */
 export function readTeamEvents(teamName: string, options: TeamEventReadOptions = {}): TeamEventBatch {
   const after = parseCursor(options.afterCursor);
@@ -403,22 +510,33 @@ export function readTeamEvents(teamName: string, options: TeamEventReadOptions =
   const types = options.eventTypes ? new Set(options.eventTypes) : undefined;
   const taskIds = options.taskIds ? new Set(options.taskIds) : undefined;
   const limit = validatedLimit(options.limit);
-  const matching = events.filter((event) => {
-    if (parseCursor(event.cursor) <= after || (types && !types.has(event.type))) return false;
-    if (!taskIds) return true;
-    if (event.type === "task") return taskIds.has(event.ref.taskId);
-    if (event.type === "alert") return !!event.taskRef && taskIds.has(event.taskRef.taskId);
-    // A Task-targeted sync must not let unrelated Worker telemetry crowd the
-    // requested semantic changes out of a bounded page.
-    return false;
-  });
-  const selected = matching.slice(0, limit);
-  const remaining = matching.length - selected.length;
+  const start = firstEventAfter(events, after);
+  const matching = !types && !taskIds
+    ? events.slice(start, start + limit)
+    : events.slice(start).filter((event) => {
+      if (types && !types.has(event.type)) return false;
+      if (!taskIds) return true;
+      if (event.type === "task") return taskIds.has(event.ref.taskId);
+      if (event.type === "alert") return !!event.taskRef && taskIds.has(event.taskRef.taskId);
+      // A Task-targeted sync must not let unrelated Worker telemetry crowd the
+      // requested semantic changes out of a bounded page.
+      return false;
+    }).slice(0, limit);
+  const matchingCount = !types && !taskIds
+    ? events.length - start
+    : events.slice(start).filter((event) => {
+      if (types && !types.has(event.type)) return false;
+      if (!taskIds) return true;
+      if (event.type === "task") return taskIds.has(event.ref.taskId);
+      if (event.type === "alert") return !!event.taskRef && taskIds.has(event.taskRef.taskId);
+      return false;
+    }).length;
+  const remaining = matchingCount - matching.length;
   const truncated = remaining > 0;
   return {
-    cursor: truncated ? selected.at(-1)!.cursor : headCursor,
+    cursor: truncated ? matching.at(-1)!.cursor : headCursor,
     headCursor,
-    events: selected,
+    events: matching,
     truncated,
     remaining,
   };
