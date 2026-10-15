@@ -80,6 +80,33 @@ The [canonical example](../examples/pi-team-bright.settings.json) is the setup
 entry point. The [work record](../projects/model-role-settings.md) tracks the
 base, scope, verification, and remaining work.
 
+## Stable Worker system-prompt addition
+
+The Worker system-prompt addition contains Worker and Team identity, the lead
+name, the standing Worker profile, and the Task work contract. It excludes the
+configured model assignment, model-role alias, runtime model, and thinking
+level. The adapter captures the complete addition on the first successful
+Worker-profile read in a Session. It reuses those bytes for the rest of that
+Session. A failed read before capture leaves the standing profile absent and
+retries on the next run. A successful read with no profile captures that absence.
+Later read failures and profile edits cannot change a captured addition. Profile
+edits take effect when a new or recovered Session starts. Capture is in memory;
+no stored Session or Team record changes.
+
+The Session query port exposes only the standing profile prompt. The lead's
+model projection in Team snapshots remains unchanged. Pi Session history still
+owns continued model selection; model-role creation and recovery policy remain
+unchanged.
+
+Architecture impact: **changed** in PTB's model-facing prompt contract. Topology
+and persistence boundaries remain unchanged. The HyperCarrier diagram keeps PTB
+internals opaque. The registered `before_agent_start` handler in
+[`pi-team-session-adapter.ts`](../../extensions/pi-team-session-adapter.ts)
+owns this projection. The same-Session regression in
+[`pi-session-adapter.characterization.test.ts`](../../src/utils/pi-session-adapter.characterization.test.ts)
+checks model and thinking changes, read failures, profile edits, recovery,
+retained role/profile/Task text, and absence of model facts.
+
 ## Branch-held Team observation
 
 Accepted Proposal A, recorded in [Decision 0020](../decisions/0020-branch-held-team-cursor.md),

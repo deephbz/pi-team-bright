@@ -38,10 +38,6 @@ export interface PiSessionCurrentBinding {
 
 export interface PiSessionWorkerProfile {
   prompt?: string;
-  /** Configured initial assignment, not current runtime selection. */
-  model?: string;
-  modelAlias?: string;
-  thinking?: string;
 }
 
 /** Pi Session adapter's read-only Team boundary. */
