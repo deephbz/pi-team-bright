@@ -1,4 +1,4 @@
-import { hostEnv } from "../env/host-env";
+import { hostEnv, type DurableFileHandle } from "../env/host-env";
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -267,10 +267,10 @@ export async function createTeam(
   });
 }
 
-function readConfigRaw(p: string): TeamConfig {
+function parseConfigRaw(p: string, raw: string): TeamConfig {
   let value: unknown;
   try {
-    value = JSON.parse(fs.readFileSync(p, "utf-8"));
+    value = JSON.parse(raw);
   } catch (error) {
     throw malformedConfigError(p, error instanceof Error ? error.message : String(error));
   }
@@ -279,6 +279,38 @@ function readConfigRaw(p: string): TeamConfig {
   }
   validateConfigShape(value as Record<string, unknown>, p);
   return value as TeamConfig;
+}
+
+function readConfigRaw(p: string): TeamConfig {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(p, "utf-8");
+  } catch (error) {
+    throw malformedConfigError(p, error instanceof Error ? error.message : String(error));
+  }
+  return parseConfigRaw(p, raw);
+}
+
+async function readConfigRawAsync(p: string): Promise<TeamConfig> {
+  let raw: string;
+  let handle: DurableFileHandle | undefined;
+  try {
+    handle = await hostEnv().durableFs.open(p, "r");
+    const { size } = await handle.stat();
+    const buffer = Buffer.alloc(size);
+    let offset = 0;
+    while (offset < size) {
+      const { bytesRead } = await handle.read(buffer, offset, size - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    raw = buffer.subarray(0, offset).toString("utf-8");
+  } catch (error) {
+    throw malformedConfigError(p, error instanceof Error ? error.message : String(error));
+  } finally {
+    try { await handle?.close(); } catch {}
+  }
+  return parseConfigRaw(p, raw);
 }
 
 // TeamConfig replacement uses the shared durable JSON writer.
@@ -527,9 +559,7 @@ export async function readConfig(teamName: string): Promise<TeamConfig> {
   if (!fs.existsSync(p)) {
     throw new Error(`Team ${teamName} not found`);
   }
-  return await withLock(p, async () => {
-    return readConfigRaw(p);
-  });
+  return withLock(p, () => readConfigRawAsync(p));
 }
 
 /** Hold current membership/config stable across a dependent filesystem write. */

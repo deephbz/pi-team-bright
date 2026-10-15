@@ -3,7 +3,7 @@ import fs from "node:fs";
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { addMember, createTeam, deactivateMembership, findLeadTeamForSession } from "./teams";
+import { addMember, createTeam, deactivateMembership, findLeadTeamForSession, readConfig } from "./teams";
 import * as paths from "./paths";
 import { nodeHostEnv } from "../env/host-env";
 
@@ -115,6 +115,7 @@ describe("TeamConfig authority recovery", () => {
     fs.writeFileSync(configFile, raw, { mode: 0o640 });
 
     await expect(createTeam(teamName, "new-session", "lead")).rejects.toThrow(/malformed.*refusing to overwrite/i);
+    await expect(readConfig(teamName)).rejects.toThrow(/malformed.*refusing to overwrite/i);
     expect(fs.readFileSync(configFile, "utf8")).toBe(raw);
     expect(fs.statSync(configFile).mode & 0o7777).toBe(0o640);
   });
@@ -232,6 +233,32 @@ describe("TeamConfig authority recovery", () => {
       { leader_share: 0.7, worker_tiling: "grid" as const },
     )).rejects.toThrow(/unsupported.*tmux/i);
     expect(fs.existsSync(configFile)).toBe(false);
+  });
+
+  it("awaits the TeamConfig read while holding the config lock", async () => {
+    await createTeam(teamName, "session", "lead");
+    const originalOpen = nodeHostEnv.durableFs.open.bind(nodeHostEnv.durableFs);
+    let markStarted!: () => void;
+    let releaseRead!: () => void;
+    const started = new Promise<void>((resolve) => { markStarted = resolve; });
+    const gate = new Promise<void>((resolve) => { releaseRead = resolve; });
+    const open = vi.spyOn(nodeHostEnv.durableFs, "open").mockImplementation(async (...args) => {
+      expect(args[0]).toBe(configFile);
+      expect(fs.existsSync(`${configFile}.lock`)).toBe(true);
+      markStarted();
+      await gate;
+      return originalOpen(...args);
+    });
+    let resultFinished = false;
+    const result = readConfig(teamName).finally(() => { resultFinished = true; });
+
+    await started;
+    expect(resultFinished).toBe(false);
+    expect(fs.existsSync(`${configFile}.lock`)).toBe(true);
+    releaseRead();
+    await expect(result).resolves.toMatchObject({ name: teamName });
+    expect(open).toHaveBeenCalledOnce();
+    expect(fs.existsSync(`${configFile}.lock`)).toBe(false);
   });
 
   it("preserves the old config when an atomic TeamConfig rename fails", async () => {

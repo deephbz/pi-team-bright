@@ -236,8 +236,9 @@ describe("Pi session lifecycle", () => {
       sendUserMessage: firstWake,
     } as never);
     const firstContext = lifecycleContext(sessionFile);
-    await firstHandlers.get("session_start")?.({ reason: "startup" }, firstContext);
+    const firstStart = firstHandlers.get("session_start")?.({ reason: "startup" }, firstContext);
     await vi.advanceTimersByTimeAsync(1_000);
+    await firstStart;
     expect(firstWake).not.toHaveBeenCalled();
     await firstHandlers.get("session_shutdown")?.({ reason: "quit" }, firstContext);
     vi.stubEnv("PI_AGENT_LAUNCH_ID", "");
@@ -250,8 +251,9 @@ describe("Pi session lifecycle", () => {
       sendUserMessage: resumedWake,
     } as never);
     const resumedContext = lifecycleContext(sessionFile);
-    await resumedHandlers.get("session_start")?.({ reason: "resume" }, resumedContext);
+    const resumedStart = resumedHandlers.get("session_start")?.({ reason: "resume" }, resumedContext);
     await vi.advanceTimersByTimeAsync(1_000);
+    await resumedStart;
     expect(resumedWake).not.toHaveBeenCalled();
     await resumedHandlers.get("session_shutdown")?.({ reason: "quit" }, resumedContext);
   });
@@ -546,16 +548,22 @@ describe("Pi session lifecycle", () => {
     const first = lifecycleContext("session");
     const replacement = lifecycleContext("session");
 
-    await handlers.get("session_start")?.({}, first);
+    const firstStart = handlers.get("session_start")?.({}, first);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await firstStart;
     expect(vi.getTimerCount()).toBeGreaterThan(0);
-    await handlers.get("session_start")?.({}, replacement);
+    const replacementStart = handlers.get("session_start")?.({}, replacement);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await replacementStart;
     expect(vi.getTimerCount()).toBeGreaterThan(0);
     await vi.advanceTimersByTimeAsync(30_000);
 
     expect(first.isIdle).not.toHaveBeenCalled();
     expect(replacement.isIdle).not.toHaveBeenCalled();
 
-    await handlers.get("session_shutdown")?.({}, replacement);
+    const shutdown = handlers.get("session_shutdown")?.({}, replacement);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await shutdown;
     // An in-flight filesystem-lock heartbeat may remain briefly after the
     // delivery intervals are stopped; it is not a context poll.
     await vi.advanceTimersByTimeAsync(30_000);
