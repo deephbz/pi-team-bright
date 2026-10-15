@@ -196,18 +196,20 @@ describe("Coordination event-journal ownership boundary", () => {
     read.mockRestore();
   });
 
-  it("reads only appended bytes and rejects non-monotonic appended cursors", async () => {
+  it("verifies cached bytes before parsing appends and rejects non-monotonic appended cursors", async () => {
     const journalPath = teamEventJournalPath(teamName);
     await journal.appendTeamEvent(teamName, {
       type: "alert", alertId: "first", from: "team-lead", to: "worker", kind: "attention", text: "first",
     });
     journal.readTeamEvents(teamName);
     const appended = `${JSON.stringify({ cursor: "2", type: "alert", alertId: "second", from: "team-lead", to: "worker", kind: "attention", text: "second", at: "2026-09-26T00:00:00Z" })}\n`;
+    const prefixBytes = fs.statSync(journalPath).size;
     fs.appendFileSync(journalPath, appended);
     const read = vi.spyOn(fs, "readSync");
     expect(journal.readTeamEvents(teamName).events).toHaveLength(2);
-    expect(read).toHaveBeenCalledTimes(1);
-    expect(read).toHaveBeenCalledWith(expect.any(Number), expect.any(Buffer), 0, Buffer.byteLength(appended), expect.any(Number));
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(read).toHaveBeenNthCalledWith(1, expect.any(Number), expect.any(Buffer), 0, prefixBytes, 0);
+    expect(read).toHaveBeenNthCalledWith(2, expect.any(Number), expect.any(Buffer), 0, Buffer.byteLength(appended), prefixBytes);
     read.mockRestore();
 
     fs.appendFileSync(journalPath, `${JSON.stringify({ cursor: "2", type: "alert", alertId: "duplicate", from: "team-lead", to: "worker", kind: "attention", text: "duplicate", at: "2026-09-26T00:00:00Z" })}\n`);
