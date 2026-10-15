@@ -362,11 +362,26 @@ export class HerdrAdapter implements TerminalAdapter {
   async prepareSpawnAsync(options: SpawnOptions, deadline = hostEnv().clock.now() + 9000): Promise<string> {
     if (!options.panePlacement) throw new Error("Herdr Worker spawn requires exact Team pane placement.");
     const { leaderPaneId, workerPaneIds } = options.panePlacement;
-    const queries = [["pane", "layout", "--pane", leaderPaneId], ...[leaderPaneId, ...workerPaneIds].map(id => ["pane", "get", id])];
-    const snapshot = new Map<string, Record<string, unknown> | Error>(await Promise.all(queries.map(async args => {
-      try { return [JSON.stringify(args), await this.invokeAsync(args, deadline)] as const; }
-      catch (error) { return [JSON.stringify(args), error instanceof Error ? error : new Error(String(error))] as const; }
-    })));
+    const layoutArgs = ["pane", "layout", "--pane", leaderPaneId];
+    const layoutReply = await this.invokeAsync(layoutArgs, deadline);
+    const { record, panes } = this.paneLayout(leaderPaneId, () => layoutReply);
+    const paneIds = panes.map(pane => pane.pane_id);
+    if (typeof record.tab_id !== "string" || !record.tab_id || typeof record.workspace_id !== "string" || !record.workspace_id
+      || !paneIds.includes(leaderPaneId) || paneIds.some(id => typeof id !== "string" || !id)
+      || new Set(paneIds).size !== paneIds.length) {
+      throw new Error(`Herdr leader pane ${leaderPaneId} layout does not prove exact pane identities; refusing Worker spawn.`);
+    }
+    const snapshot = new Map<string, Record<string, unknown> | Error>([[JSON.stringify(layoutArgs), layoutReply]]);
+    // A single layout proves location for its exact member panes. Do not carry
+    // this evidence into another operation or infer absence for omitted panes.
+    for (const pane of panes) snapshot.set(JSON.stringify(["pane", "get", pane.pane_id]), {
+      pane: { ...pane, tab_id: record.tab_id, workspace_id: record.workspace_id },
+    });
+    await Promise.all(workerPaneIds.filter(id => !paneIds.includes(id)).map(async id => {
+      const args = ["pane", "get", id];
+      try { snapshot.set(JSON.stringify(args), await this.invokeAsync(args, deadline)); }
+      catch (error) { snapshot.set(JSON.stringify(args), error instanceof Error ? error : new Error(String(error))); }
+    }));
     const splitArgs = this.splitArgs(options, args => {
       const value = snapshot.get(JSON.stringify(args));
       if (value instanceof Error) throw value;
