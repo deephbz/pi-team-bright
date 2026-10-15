@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readPtbSettingsDocument, savePtbSettingsDocument } from "./ptb-settings-editor";
+import { nodeHostEnv } from "../env/host-env";
 
 const created: string[] = [];
 
@@ -126,7 +127,7 @@ describe("Pi Team Bright settings editor", () => {
     write(box.global, { theme: "dark", pi_team_bright: {} });
     const before = fs.readFileSync(box.global, "utf8");
     const document = readPtbSettingsDocument({ cwd: box.cwd, agentDir: box.agentDir, projectTrusted: false, scope: "global" });
-    vi.spyOn(fs, "renameSync").mockImplementation(() => { throw new Error("fixture rename failure"); });
+    vi.spyOn(nodeHostEnv.durableFs, "rename").mockRejectedValue(new Error("fixture rename failure"));
     await expect(savePtbSettingsDocument(document, { team: { auto_sync_enabled: false } }))
       .rejects.toMatchObject({ code: "write_failed" });
     expect(fs.readFileSync(box.global, "utf8")).toBe(before);
@@ -138,6 +139,22 @@ describe("Pi Team Bright settings editor", () => {
     const before = fs.readFileSync(box.global, "utf8");
     const document = readPtbSettingsDocument({ cwd: box.cwd, agentDir: box.agentDir, projectTrusted: false, scope: "global" });
     await expect(savePtbSettingsDocument(document, { team: { auto_sync_enabled: false } }, { isCurrent: () => false }))
+      .rejects.toMatchObject({ code: "stale_context" });
+    expect(fs.readFileSync(box.global, "utf8")).toBe(before);
+  });
+
+  it("rechecks currentness at the atomic replacement commit step", async () => {
+    const box = fixture();
+    write(box.global, { theme: "dark", pi_team_bright: {} });
+    const before = fs.readFileSync(box.global, "utf8");
+    const document = readPtbSettingsDocument({ cwd: box.cwd, agentDir: box.agentDir, projectTrusted: false, scope: "global" });
+    let current = true;
+    const rename = nodeHostEnv.durableFs.rename.bind(nodeHostEnv.durableFs);
+    vi.spyOn(nodeHostEnv.durableFs, "rename").mockImplementation(async (from, to, beforeCommit) => {
+      current = false;
+      await rename(from, to, beforeCommit);
+    });
+    await expect(savePtbSettingsDocument(document, { team: { auto_sync_enabled: false } }, { isCurrent: () => current }))
       .rejects.toMatchObject({ code: "stale_context" });
     expect(fs.readFileSync(box.global, "utf8")).toBe(before);
   });

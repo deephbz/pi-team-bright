@@ -1,10 +1,10 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { createTeam, addMember } from "./teams";
 import * as paths from "./paths";
-import { writeJsonAtomic } from "./atomic-json";
 import { enqueueTaskChange, readTaskDeliveries, readTaskDeliveryTombstones, recordTaskDeliveryRecovery, TaskChangeDelivery, type TaskDeliveryRecord } from "./task-delivery";
 import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { withSemanticTrace } from "./trace";
@@ -25,7 +25,7 @@ afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); for (const name of n
 it("compacts only acknowledged spool history and retains every pending change and tombstone", async () => {
   const f = await fixture(151);
   f.records[0] = (await enqueueTaskChange(f.name, f.tasks[0], "assigned"))!;
-  writeJsonAtomic(paths.taskDeliveryPath(f.name, "worker"), f.records.slice(0, 150));
+  writeJsonFixture(paths.taskDeliveryPath(f.name, "worker"), f.records.slice(0, 150));
   const sink = { sendMessage: vi.fn(), appendEntry: vi.fn() };
   const delivery = new TaskChangeDelivery(sink, { teamName: f.name, recipient: "worker", sessionFile: "/synthetic/worker", membershipId: "worker-membership", graphAuthority: f.graph,
     membership: { currentRecipient: async () => ({ membershipId: "worker-membership" }), withCurrentRecipient: async (_input, action) => action() } });
@@ -47,7 +47,7 @@ it("compacts only acknowledged spool history and retains every pending change an
 
 it("retains more than 256 pending ownership and status changes without lossy backpressure", async () => {
   const f = await fixture(301);
-  writeJsonAtomic(paths.taskDeliveryPath(f.name, "worker"), f.records.slice(0, 300));
+  writeJsonFixture(paths.taskDeliveryPath(f.name, "worker"), f.records.slice(0, 300));
   await enqueueTaskChange(f.name, f.tasks[300], "assigned");
   expect(await readTaskDeliveries(f.name, "worker")).toHaveLength(301);
   expect((await readTaskDeliveries(f.name, "worker")).slice(0, 300)).toEqual(f.records.slice(0, 300));

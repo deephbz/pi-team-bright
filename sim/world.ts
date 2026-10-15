@@ -9,7 +9,7 @@ import { Entropy, type Choice } from "./entropy";
 import { Scheduler } from "./scheduler";
 import { generationKey, ProcessTable } from "./process-table";
 import { ExecRouter, HerdrFake } from "./herdr";
-import { HostGuard } from "./host-guard";
+import { createSimulatedDurableFileSystem, HostGuard } from "./host-guard";
 import { assumptionEvidence, type FakeEvidence } from "./assumptions";
 
 export class ActorExit extends Error {
@@ -59,10 +59,10 @@ export class SimWorld {
         this.record({ kind: "fault.effect", source: "journal", detail: "fsync committed journal bytes before injected EIO" });
         throw Object.assign(new Error("Injected journal commit-then-error"), { code: "EIO" });
       }
-    }, (actor, label, action, onCancel) => new Promise((resolve, reject) => {
+    }, actor => this.processes.actor(actor), (actor, generation) => this.actorGenerationIsLive(actor, generation as ProcessGeneration), (actor, generation, label, action, onCancel) => new Promise((resolve, reject) => {
       this.enqueue(actor, label, () => {
         try { resolve(action()); } catch (error) { reject(error); }
-      }, 0, () => reject(onCancel?.() ?? new Error("Scheduled filesystem operation cancelled")));
+      }, 0, () => reject(onCancel?.() ?? new Error("Scheduled filesystem operation cancelled")), generation as ProcessGeneration & { alive: boolean });
     }));
     this.observer = new HistoryObserver(home, fact => this.record(fact, { kind: "observer" }));
     this.record({ kind: "authority.tracing" }, { kind: "setup" });
@@ -88,6 +88,7 @@ export class SimWorld {
     });
     this.generations.set(actor, process);
     const env: HostEnv = {
+      durableFs: createSimulatedDurableFileSystem(),
       clock: this.scheduler.clock(actor, callback => process.alive ? this.enter(actor, callback) : undefined),
       random: this.entropy,
       process: {
@@ -154,8 +155,8 @@ export class SimWorld {
     return this.withOrigin(origin?.kind === "ptb" && origin.actor.team === actorRef(actor).team && origin.actor.actor === actorRef(actor).actor
       ? origin : { kind: "ptb", actor: actorRef(actor) }, () => runWithHostEnv(env, () => this.guard.run(action, actor)));
   }
-  enqueue(actor: string, label: string, action: () => unknown, delay = 0, onCancel?: () => void): number {
-    const generation = this.generations.get(actor);
+  enqueue(actor: string, label: string, action: () => unknown, delay = 0, onCancel?: () => void, expectedGeneration?: ProcessGeneration & { alive: boolean }): number {
+    const generation = expectedGeneration ?? this.generations.get(actor);
     const origin = this.origins.getStore() ?? { kind: "ptb" as const, actor: actorRef(actor) };
     return this.scheduler.enqueue(label, () => {
       if (!generation?.alive || this.generations.get(actor) !== generation) return;

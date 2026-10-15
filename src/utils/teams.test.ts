@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { addMember, createTeam, deactivateMembership, findLeadTeamForSession } from "./teams";
 import * as paths from "./paths";
+import { nodeHostEnv } from "../env/host-env";
 
 const testDir = path.join(os.tmpdir(), `pi-teams-authority-${process.pid}`);
 const configFile = path.join(testDir, "config.json");
@@ -236,7 +237,7 @@ describe("TeamConfig authority recovery", () => {
   it("preserves the old config when an atomic TeamConfig rename fails", async () => {
     const initial = await createTeam(teamName, "session", "lead");
     const before = fs.readFileSync(configFile, "utf8");
-    const rename = vi.spyOn(fsp, "rename").mockRejectedValue(new Error("simulated atomic rename failure"));
+    const rename = vi.spyOn(nodeHostEnv.durableFs, "rename").mockRejectedValue(new Error("simulated atomic rename failure"));
 
     await expect(addMember(teamName, {
       agentId: "worker-id",

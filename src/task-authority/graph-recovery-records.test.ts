@@ -1,9 +1,9 @@
+import { writeJsonFixture } from "../utils/test-write-json";
 import fs from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
-import { createTeam, writeConfigAtomic } from "../utils/teams";
+import { createTeam } from "../utils/teams";
 import { configPath, taskDeliveryRecoveryPath, teamDir } from "../utils/paths";
-import { writeJsonAtomic } from "../utils/atomic-json";
 import { readTaskDeliveries, reconcileTaskChanges } from "../utils/task-delivery";
 import type { TaskVersionRef } from "./task-version-ref";
 
@@ -12,12 +12,12 @@ async function fixture() {
   const teamName = `targetless-${process.pid}-${names.length}`; names.push(teamName);
   const config = await createTeam(teamName, "lead-session", "lead");
   config.members.push({ membershipId: "replacement-membership", agentId: "worker", name: "worker", agentType: "teammate", joinedAt: 0, cwd: "/synthetic", sessionFile: "replacement-session", subscriptions: [] });
-  writeConfigAtomic(configPath(teamName), config);
+  writeJsonFixture(configPath(teamName), config);
   const graph = new DurableGraphTaskAuthority();
   await graph.applyGraph(teamName, { operationId: "apply", tasks: [{ key: "work", title: "Work", goal: "Complete the criterion.", assignee: "worker" }] });
   const task = (await graph.readTasks(teamName))[0];
   const record = { teamName, taskId: task.id, taskVersion: task.version, recipients: ["worker"], changeKind: "assigned", reason: "enqueue-failed", recordedAt: "2026-10-13T00:00:00.000Z", taskProjection: task };
-  writeJsonAtomic(taskDeliveryRecoveryPath(teamName), [record]);
+  writeJsonFixture(taskDeliveryRecoveryPath(teamName), [record]);
   return { teamName, graph, task, record };
 }
 afterEach(() => { vi.restoreAllMocks(); for (const teamName of names.splice(0)) fs.rmSync(teamDir(teamName), { force: true, recursive: true }); });
@@ -51,7 +51,7 @@ it("retires targetless records when the current assignee differs even at a match
 
 it.each([null, { taskId: "bad", taskVersion: "bad-version", recipients: ["worker"] }])("retires a malformed recovery record without stopping other recovery: %j", async malformed => {
   const { teamName, graph, record } = await fixture();
-  writeJsonAtomic(taskDeliveryRecoveryPath(teamName), [malformed, record]);
+  writeJsonFixture(taskDeliveryRecoveryPath(teamName), [malformed, record]);
   const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
   expect(await reconcileTaskChanges(teamName, "worker", graph)).toBe(1);
   expect(await reconcileTaskChanges(teamName, "worker", graph)).toBe(0);

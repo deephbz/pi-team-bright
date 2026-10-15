@@ -262,7 +262,7 @@ export async function createTeam(
     ...(syncLiveness ? { syncLiveness: structuredClone(syncLiveness) } : {}),
   };
 
-  await writeConfigAtomicAsync(configPath(name), config);
+  await writeJsonAtomicAsync(configPath(name), config);
   return config;
   });
 }
@@ -281,60 +281,7 @@ function readConfigRaw(p: string): TeamConfig {
   return value as TeamConfig;
 }
 
-function fsyncDirectory(dir: string): void {
-  try {
-    const fd = fs.openSync(dir, "r");
-    try {
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
-  } catch {
-    // Directory fsync is not available on every supported local filesystem.
-  }
-}
-
-/** Persist TeamConfig without exposing a truncated target file. */
-export async function writeConfigAtomicAsync(p: string, config: TeamConfig): Promise<void> {
-  await writeJsonAtomicAsync(p, config);
-}
-
-export function writeConfigAtomic(p: string, config: TeamConfig): void {
-  const dir = path.dirname(p);
-  const existing = fs.existsSync(p) ? fs.statSync(p) : undefined;
-  if (existing && !existing.isFile()) throw new Error(`Cannot replace TeamConfig ${p}: the existing path is not a regular file.`);
-
-  const existingMode = existing ? existing.mode & 0o7777 : 0o600;
-  const tempPath = path.join(dir, `.${path.basename(p)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.${hostEnv().random.bytes(6).toString("hex")}.tmp`);
-  let fd: number | undefined;
-  try {
-    // Start restrictive even when the eventual replacement must retain a
-    // pre-existing mode; the temporary name is never created world-readable.
-    fd = fs.openSync(tempPath, "wx", 0o600);
-    fs.writeFileSync(fd, JSON.stringify(config, null, 2));
-    fs.fsyncSync(fd);
-    if (existing && existingMode !== 0o600) fs.fchmodSync(fd, existingMode);
-    fs.fsyncSync(fd);
-    fs.closeSync(fd);
-    fd = undefined;
-    fs.renameSync(tempPath, p);
-    fsyncDirectory(dir);
-  } catch (error) {
-    if (fd !== undefined) {
-      try {
-        fs.closeSync(fd);
-      } catch {
-        // Preserve the write error.
-      }
-    }
-    try {
-      fs.unlinkSync(tempPath);
-    } catch {
-      // The rename may have succeeded before a directory fsync failure.
-    }
-    throw error;
-  }
-}
+// TeamConfig replacement uses the shared durable JSON writer.
 
 /** Find the team this durable Pi Session leads. */
 export function findLeadTeamForSession(piSessionFile?: string): string | null {
@@ -660,7 +607,7 @@ export async function ensureLogicalWorker(
     }
     const worker = structuredClone(input);
     config.logicalWorkers!.push(worker);
-    await writeConfigAtomicAsync(p, config);
+    await writeJsonAtomicAsync(p, config);
     return { kind: "created", worker: structuredClone(worker) };
   });
 }
@@ -799,7 +746,7 @@ export async function bindMemberSession(
       }
     }
     Object.assign(member, updates);
-    await writeConfigAtomicAsync(p, config);
+    await writeJsonAtomicAsync(p, config);
     return structuredClone(member);
   });
 }
@@ -849,7 +796,7 @@ export async function addMember(teamName: string, member: Member) {
       throw new Error(`Team Worker limit ${workerLimit} has been reached; stop a current Worker before ensuring another.`);
     }
     config.members.push(next);
-    await writeConfigAtomicAsync(p, config);
+    await writeJsonAtomicAsync(p, config);
   });
 }
 
@@ -866,7 +813,7 @@ export async function deactivateMember(
     member.isActive = false;
     member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
     member.deactivationReason = reason;
-    await writeConfigAtomicAsync(p, config);
+    await writeJsonAtomicAsync(p, config);
     return structuredClone(member);
   });
 }
@@ -885,7 +832,7 @@ export async function deactivateMembership(
     member.isActive = false;
     member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
     member.deactivationReason = reason;
-    await writeConfigAtomicAsync(p, config);
+    await writeJsonAtomicAsync(p, config);
     return structuredClone(member);
   });
 }
@@ -905,7 +852,7 @@ export async function deactivateCurrentMembers(
       member.deactivatedAt = at;
       member.deactivationReason = reason;
     }
-    if (current.length > 0) await writeConfigAtomicAsync(p, config);
+    if (current.length > 0) await writeJsonAtomicAsync(p, config);
     return { deactivated: structuredClone(current), staleBindings: structuredClone(staleBindings) };
   });
 }
@@ -923,7 +870,7 @@ export async function updateMember(teamName: string, agentName: string, updates:
         }
       }
       Object.assign(m, updates);
-      await writeConfigAtomicAsync(p, config);
+      await writeJsonAtomicAsync(p, config);
     }
   });
 }
@@ -941,7 +888,7 @@ export async function updateMembership(teamName: string, membershipId: string, u
       }
     }
     Object.assign(member, updates);
-    await writeConfigAtomicAsync(p, config);
+    await writeJsonAtomicAsync(p, config);
     return structuredClone(member);
   });
 }

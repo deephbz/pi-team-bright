@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
@@ -13,7 +14,7 @@ async function fixture(suffix: string) {
   await teams.createTeam(name, `/tmp/${name}-lead.jsonl`, `lead@${name}`);
   const config = await teams.readConfig(name);
   config.logicalWorkers = [{ name: "worker", scope: "Complete graph work." }];
-  teams.writeConfigAtomic(paths.configPath(name), config);
+  writeJsonFixture(paths.configPath(name), config);
   await teams.addMember(name, { membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate", joinedAt: Date.now(), sessionFile: `/tmp/${name}-worker.jsonl`, cwd: process.cwd(), subscriptions: [], isActive: true });
   const authority = new DurableGraphTaskAuthority();
   const publication = new DurableTaskMutationPublication();

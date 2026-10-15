@@ -3,7 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { writeJsonAtomic } from "./atomic-json";
+import { writeJsonAtomicAsync } from "./atomic-json";
 import { withLock } from "./lock";
 import { validPtbModelRoleNames, validatePtbSettingsNamespace } from "./model-role-settings";
 
@@ -166,8 +166,18 @@ export async function savePtbSettingsDocument(
       } catch {
         throw new PtbSettingsEditorError("stale_context", "The Pi Session or Team changed. Reopen settings before saving.");
       }
-      try { writeJsonAtomic(document.file, updated); }
-      catch { throw new PtbSettingsEditorError("write_failed", "Pi settings could not be saved."); }
+      try {
+        await writeJsonAtomicAsync(document.file, updated, () => {
+          try {
+            if (options.isCurrent && !options.isCurrent()) throw new Error("stale");
+          } catch {
+            throw new PtbSettingsEditorError("stale_context", "The Pi Session or Team changed. Reopen settings before saving.");
+          }
+        });
+      } catch (error) {
+        if (error instanceof PtbSettingsEditorError) throw error;
+        throw new PtbSettingsEditorError("write_failed", "Pi settings could not be saved.");
+      }
       const revision = `sha256:${crypto.createHash("sha256").update(serialized).digest("hex")}`;
       return { ...document, namespace: candidate, revision };
     });

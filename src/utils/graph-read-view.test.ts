@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
@@ -6,7 +7,6 @@ import type { TaskVersionRef } from "../task-authority/task-version-ref";
 import { readGraphTaskCards, readGraphTaskCoordinates, withGraphReadView } from "./graph-read-view";
 import { graphTaskAuthorityPath, teamDir } from "./paths";
 import { readCurrentGraphTaskCoordinatesLocked } from "./graph-revision-retirement";
-import { writeJsonAtomic } from "./atomic-json";
 import { DurableGraphTaskStateDeliveryQuery } from "../adapters/durable-graph-task-read";
 import type { GraphTaskOrchestrationPort } from "../task-authority/graph-orchestration";
 import { CoordinationObservationService } from "../coordination/observation-service";
@@ -22,7 +22,7 @@ async function fixture() {
 }
 function replaceFile() {
   const file = graphTaskAuthorityPath(team);
-  writeJsonAtomic(file, JSON.parse(fs.readFileSync(file, "utf8")));
+  writeJsonFixture(file, JSON.parse(fs.readFileSync(file, "utf8")));
 }
 it("shares one recovered projection between Task hydration and delivery evidence without exposing mutable cache state", async () => {
   const authority = await fixture();

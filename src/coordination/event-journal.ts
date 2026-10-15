@@ -1,7 +1,6 @@
-import { hostEnv, type TimerHandle } from "../env/host-env";
+import { hostEnv, type DurableFileHandle, type TimerHandle } from "../env/host-env";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import fsp from "node:fs/promises";
 import path from "node:path";
 import { withLock } from "../utils/lock";
 import type { TaskTeamEvent, TeamEvent, TeamEventInput, TeamEventType } from "./contracts";
@@ -401,7 +400,16 @@ function readJournal(teamName: string): TeamEvent[] {
   }
 }
 
-async function readLastJournalLine(handle: fsp.FileHandle, end: number): Promise<{ bytes: Buffer; start: number; end: number } | undefined> {
+async function writeJournalBytes(handle: DurableFileHandle, bytes: Buffer): Promise<void> {
+  let offset = 0;
+  while (offset < bytes.length) {
+    const { bytesWritten } = await handle.write(bytes, offset, bytes.length - offset, null);
+    if (bytesWritten <= 0) throw new Error("Team event journal write made no progress.");
+    offset += bytesWritten;
+  }
+}
+
+async function readLastJournalLine(handle: DurableFileHandle, end: number): Promise<{ bytes: Buffer; start: number; end: number } | undefined> {
   const chunks: Buffer[] = [];
   let lineEnd: number | undefined;
   while (end > 0) {
@@ -432,7 +440,7 @@ async function readLastJournalLine(handle: fsp.FileHandle, end: number): Promise
 async function readJournalTailCursor(teamName: string): Promise<bigint> {
   const journal = teamEventJournalPath(teamName);
   if (!fs.existsSync(journal)) return 0n;
-  const handle = await fsp.open(journal, "r+");
+  const handle = await hostEnv().durableFs.open(journal, "r+");
   try {
     const size = (await handle.stat()).size;
     const line = await readLastJournalLine(handle, size);
@@ -462,11 +470,11 @@ async function writeCursorProjection(teamName: string, cursor: string): Promise<
   const target = teamEventCursorStatePath(teamName);
   const directory = path.dirname(target);
   const temp = path.join(directory, `.${path.basename(target)}.${hostEnv().process.pid}.${hostEnv().clock.now()}.tmp`);
-  await fsp.writeFile(temp, JSON.stringify({ schema: EVENT_SCHEMA, cursor, updatedAt: new Date(hostEnv().clock.now()).toISOString() }), {
+  await hostEnv().durableFs.writeFile(temp, JSON.stringify({ schema: EVENT_SCHEMA, cursor, updatedAt: new Date(hostEnv().clock.now()).toISOString() }), {
     flag: "wx",
     mode: 0o600,
   });
-  await fsp.rename(temp, target);
+  await hostEnv().durableFs.rename(temp, target);
 }
 
 /**
@@ -477,7 +485,7 @@ export async function appendTeamEvents(teamName: string, inputs: readonly TeamEv
   if (!inputs.length) return [];
   if (!fs.existsSync(configPath(teamName))) throw new Error(`Team ${teamName} not found`);
   const journal = teamEventJournalPath(teamName);
-  await fsp.mkdir(path.dirname(journal), { recursive: true });
+  await hostEnv().durableFs.mkdir(path.dirname(journal), { recursive: true });
   return withLock(journal, async () => {
     let cursor = await readJournalTailCursor(teamName);
     const events = inputs.map((input) => {
@@ -487,10 +495,20 @@ export async function appendTeamEvents(teamName: string, inputs: readonly TeamEv
       parseEvent(JSON.stringify(event), 0);
       return event;
     });
-    const handle = await fsp.open(journal, "a", 0o600);
+    const handle = await hostEnv().durableFs.open(journal, "a", 0o600);
     try {
-      await handle.writeFile(`${events.map((event) => JSON.stringify(event)).join("\n")}\n`);
-      await handle.sync();
+      const start = (await handle.stat()).size;
+      await writeJournalBytes(handle, Buffer.from(`${events.map((event) => JSON.stringify(event)).join("\n")}\n`));
+      try {
+        await handle.sync();
+      } catch (error) {
+        journalReadCache.delete(journal);
+        try {
+          await handle.truncate(start);
+          await handle.sync();
+        } catch { /* Preserve the original fsync failure; rollback durability may remain uncertain. */ }
+        throw error;
+      }
     } finally {
       await handle.close();
     }

@@ -1,10 +1,10 @@
 import fs from "node:fs";
-import fsp from "node:fs/promises";
 import { afterEach, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
 import { GraphTaskController, type GraphControlSnapshot } from "../task-authority/graph-control";
 import { readCurrentGraphTaskCoordinatesLocked, withGraphRevisionLease } from "./graph-revision-retirement";
 import { graphTaskAuthorityPath, teamDir } from "./paths";
+import { nodeHostEnv } from "../env/host-env";
 
 const team = "durable-write-interleaving";
 afterEach(() => { vi.restoreAllMocks(); fs.rmSync(teamDir(team), { recursive: true, force: true }); });
@@ -23,15 +23,15 @@ it("keeps readers and successor receipts fenced while an async graph replacement
   let entered!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; });
   const paused = new Promise<void>(resolve => { entered = resolve; });
-  const rename = fsp.rename.bind(fsp);
+  const rename = nodeHostEnv.durableFs.rename.bind(nodeHostEnv.durableFs);
   let intercept = true;
-  vi.spyOn(fsp, "rename").mockImplementation(async (from, to) => {
+  vi.spyOn(nodeHostEnv.durableFs, "rename").mockImplementation(async (from, to, beforeCommit) => {
     if (String(to) === file && intercept) {
       intercept = false;
       entered();
       await held;
     }
-    return rename(from, to);
+    return rename(from, to, beforeCommit);
   });
   let firstDone = false, readDone = false, nextDone = false;
   const first = authority.applyGraph(team, firstInput).then(result => { firstDone = true; return result; });

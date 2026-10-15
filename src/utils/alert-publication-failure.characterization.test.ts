@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +13,7 @@ import * as runtime from "./runtime";
 import { DIRECT_MESSAGE_CUSTOM_TYPE, DIRECT_MESSAGE_RESUME_TYPE } from "../alert-authority/direct-delivery";
 import { readTeamEventCursor, readTeamEvents } from "../coordination/event-journal";
 import * as teams from "./teams";
+import { nodeHostEnv } from "../env/host-env";
 
 type RegisteredTool = {
   name: string;
@@ -184,9 +184,9 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
 
     // Fail only the Alert event journal open. Native Message acceptance has
     // already committed when sendAlert reaches this Coordination boundary.
-    const originalOpen = fsp.open.bind(fsp);
+    const originalOpen = nodeHostEnv.durableFs.open.bind(nodeHostEnv.durableFs);
     const eventJournal = paths.teamEventJournalPath(state.teamName);
-    const publicationFailure = vi.spyOn(fsp, "open").mockImplementation(async (target, flags = "r", mode) => {
+    const publicationFailure = vi.spyOn(nodeHostEnv.durableFs, "open").mockImplementation(async (target, flags = "r", mode) => {
       if (String(target) === eventJournal) throw new Error("injected Alert event publication failure");
       return originalOpen(target, flags as any, mode);
     });

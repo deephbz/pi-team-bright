@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -48,7 +49,7 @@ it.each([false, true])("refuses live delivery after graph removal with derived f
 
 it("does not enqueue when the selected recovery target cannot persist", async () => {
   const f = await fixture(), recovery = paths.taskDeliveryRecoveryPath(f.name);
-  atomic.writeJsonAtomic(recovery, [{ teamName: f.name, taskId: f.task.id, taskVersion: f.task.version, recipients: ["worker"], changeKind: "assigned", recordedAt: "2026-10-14T00:00:00Z", reason: "enqueue-failed", taskProjection: f.task }]);
+  writeJsonFixture(recovery, [{ teamName: f.name, taskId: f.task.id, taskVersion: f.task.version, recipients: ["worker"], changeKind: "assigned", recordedAt: "2026-10-14T00:00:00Z", reason: "enqueue-failed", taskProjection: f.task }]);
   const original = atomic.writeJsonAtomicAsync;
   vi.spyOn(atomic, "writeJsonAtomicAsync").mockImplementation(async (file, value) => {
     if (file === recovery) throw new Error("Target persistence failed");
@@ -62,7 +63,7 @@ it("does not enqueue when the selected recovery target cannot persist", async ()
 it("persists the target before enqueue and reuses it after resolution failure and replacement", async () => {
   const f = await fixture(), recovery = paths.taskDeliveryRecoveryPath(f.name);
   const old = f.engine(); await old.delivery.start([]);
-  atomic.writeJsonAtomic(recovery, [{ teamName: f.name, taskId: f.task.id, taskVersion: f.task.version, recipients: ["worker"], changeKind: "assigned", recordedAt: "2026-10-14T00:00:00Z", reason: "enqueue-failed", taskProjection: f.task }]);
+  writeJsonFixture(recovery, [{ teamName: f.name, taskId: f.task.id, taskVersion: f.task.version, recipients: ["worker"], changeKind: "assigned", recordedAt: "2026-10-14T00:00:00Z", reason: "enqueue-failed", taskProjection: f.task }]);
   const original = atomic.writeJsonAtomicAsync;
   const fault = vi.spyOn(atomic, "writeJsonAtomicAsync").mockImplementation(async (file, value) => {
     if (file === recovery && (value as any[])[0].resolvedRecipients?.length) throw new Error("Crash before recovery resolution");
@@ -89,8 +90,8 @@ it.each(["directory", "fence"])("diagnoses lost graph from %s despite obsolete B
   const f = await fixture();
   fs.rmSync(path.dirname(paths.graphTaskAuthorityPath(f.name)), { recursive: true });
   if (marker === "directory") fs.mkdirSync(path.dirname(paths.graphTaskAuthorityPath(f.name)));
-  else atomic.writeJsonAtomic(paths.graphRevisionRetirementPath(f.name), {});
-  const config = await teams.readConfig(f.name); Object.assign(config, { taskBackend: "beads" }); teams.writeConfigAtomic(paths.configPath(f.name), config);
+  else writeJsonFixture(paths.graphRevisionRetirementPath(f.name), {});
+  const config = await teams.readConfig(f.name); Object.assign(config, { taskBackend: "beads" }); writeJsonFixture(paths.configPath(f.name), config);
   fs.mkdirSync(path.join(paths.teamDir(f.name), ".beads"));
   await expect(f.graph.readTasks(f.name)).rejects.toThrow("Restore its graph authority");
   const report = await diagnoseTeam(f.name, { role: "lead", sessionBinding: "current" });

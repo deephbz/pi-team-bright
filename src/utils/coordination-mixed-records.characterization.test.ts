@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
@@ -78,7 +79,7 @@ describe("native team_sync tool results", () => {
     await teams.createTeam(name, sessionFile, "lead-agent", "Native observation fixture");
     const config = await teams.readConfig(name);
     config.logicalWorkers = [{ name: "worker", scope: "work" }];
-    teams.writeConfigAtomic(configPath(name), config);
+    writeJsonFixture(configPath(name), config);
     vi.stubEnv("PI_TEAM_NAME", ""); vi.stubEnv("PI_AGENT_NAME", "");
     vi.spyOn(DurableGraphTaskAuthority.prototype, "readTasks").mockResolvedValue([]);
     const harness = registeredLeaderHarness(), context = sessionContext(sessionFile);

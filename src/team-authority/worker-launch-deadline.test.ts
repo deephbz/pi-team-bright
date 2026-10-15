@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "../utils/test-write-json";
 import fs from "node:fs";
 import { afterEach, expect, it, vi } from "vitest";
 import * as teams from "../utils/teams";
@@ -16,7 +17,7 @@ function deferred() { let resolve!: () => void; const promise = new Promise<void
 async function fixture() {
   const name = `launch-deadline-${process.pid}-${created.length}-${Date.now()}`; created.push(name);
   const config = await teams.createTeam(name, "/fixture/lead.jsonl", "lead");
-  teams.writeConfigAtomic(configPath(name), { ...config, terminalBackend: "herdr" });
+  writeJsonFixture(configPath(name), { ...config, terminalBackend: "herdr" });
   const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }),
     lifecyclePublication: { readEventCursor: () => "0", recordWorkerPrepared: async () => ({ cursor: "1" }), observeWorkerStartup: vi.fn() } as any });
   return { name, bridge, request: { teamName: name, workerName: "worker", cwd: "/fixture", scope: "test", modelProfile: { provider: "fixture", model: "small" } } };

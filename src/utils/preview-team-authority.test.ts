@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
@@ -12,7 +13,6 @@ import {
   readLogicalWorker,
   resolveCurrentLeadSessionBinding,
   resolveCurrentTeammateSessionBinding,
-  writeConfigAtomic,
 } from "./teams";
 import type { TeamConfig } from "../team-authority/contracts";
 
@@ -94,7 +94,7 @@ describe("preview Team authority coordinates", () => {
         isActive: true,
       }],
     };
-    writeConfigAtomic(configFile, legacy);
+    writeJsonFixture(configFile, legacy);
     const before = fs.readFileSync(configFile, "utf8");
 
     await expect(readConfig("preview-team")).resolves.toMatchObject({ description: "legacy" });
@@ -104,7 +104,7 @@ describe("preview Team authority coordinates", () => {
       .resolves.toEqual({ kind: "contract_gap", reason: "team_epoch_missing" });
     expect(fs.readFileSync(configFile, "utf8")).toBe(before);
 
-    writeConfigAtomic(configFile, { ...legacy, epochId: "team_epoch_legacy-partial" });
+    writeJsonFixture(configFile, { ...legacy, epochId: "team_epoch_legacy-partial" });
     const beforeLogicalWorkerGap = fs.readFileSync(configFile, "utf8");
     await expect(readLogicalWorker("preview-team", "systems"))
       .resolves.toEqual({ kind: "contract_gap", reason: "logical_workers_missing" });

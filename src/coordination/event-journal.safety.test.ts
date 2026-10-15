@@ -1,9 +1,9 @@
 import fs from "node:fs";
-import fsp from "node:fs/promises";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import * as journal from "./event-journal";
 import { configPath, teamDir, teamEventJournalPath } from "../utils/paths";
+import { nodeHostEnv } from "../env/host-env";
 
 const names: string[] = [];
 function fixture() {
@@ -72,9 +72,9 @@ it("does not truncate a torn suffix when its preceding committed line is malform
 it("completes short tail reads before allocating the next cursor", async () => {
   const { name, file } = fixture();
   await journal.appendTeamEvent(name, input("prior"));
-  const originalOpen = fsp.open.bind(fsp);
+  const originalOpen = nodeHostEnv.durableFs.open.bind(nodeHostEnv.durableFs);
   let reads = 0;
-  vi.spyOn(fsp, "open").mockImplementation(async (...args) => {
+  vi.spyOn(nodeHostEnv.durableFs, "open").mockImplementation(async (...args) => {
     const handle = await originalOpen(...args);
     if (args[0] === file && args[1] === "r+") {
       const originalRead = handle.read.bind(handle);
@@ -95,8 +95,8 @@ it("fails without truncating a valid unterminated row when newline write makes n
   await journal.appendTeamEvent(name, input("prior"));
   const before = fs.readFileSync(file).subarray(0, -1);
   fs.writeFileSync(file, before);
-  const originalOpen = fsp.open.bind(fsp);
-  vi.spyOn(fsp, "open").mockImplementation(async (...args) => {
+  const originalOpen = nodeHostEnv.durableFs.open.bind(nodeHostEnv.durableFs);
+  vi.spyOn(nodeHostEnv.durableFs, "open").mockImplementation(async (...args) => {
     const handle = await originalOpen(...args);
     if (args[0] === file && args[1] === "r+") {
       handle.write = (async (buffer: Buffer) => ({ bytesWritten: 0, buffer })) as typeof handle.write;
@@ -105,6 +105,28 @@ it("fails without truncating a valid unterminated row when newline write makes n
   });
   await expect(journal.appendTeamEvent(name, input("after"))).rejects.toThrow(/no progress/);
   expect(fs.readFileSync(file)).toEqual(before);
+});
+
+it("truncates bytes from an append whose fsync fails and rethrows", async () => {
+  const { name, file } = fixture();
+  await journal.appendTeamEvent(name, input("prior"));
+  const committed = fs.readFileSync(file);
+  const durableFs = nodeHostEnv.durableFs;
+  const open = durableFs.open.bind(durableFs);
+  let injectFailure = true;
+  vi.spyOn(durableFs, "open").mockImplementation(async (path, flags, mode) => {
+    const handle = await open(path, flags, mode);
+    if (injectFailure && path === file && flags === "a") {
+      injectFailure = false;
+      vi.spyOn(handle, "sync").mockRejectedValueOnce(new Error("injected fsync failure"));
+    }
+    return handle;
+  });
+
+  await expect(journal.appendTeamEvent(name, input("failed"))).rejects.toThrow("injected fsync failure");
+  expect(fs.readFileSync(file)).toEqual(committed);
+  expect((await journal.appendTeamEvent(name, input("after"))).cursor).toBe("2");
+  expect(journal.readTeamEvents(name).events.map((event) => event.cursor)).toEqual(["1", "2"]);
 });
 
 it("rejects same-inode prefix corruption plus growth in both warm and cold reads", async () => {
@@ -141,26 +163,19 @@ it.each([false, true])("revalidates an early prefix rewrite beyond a tail anchor
   }
 });
 
-it("persists every batch row across legal native short writes before syncing and returning receipts", async () => {
+it("completes short journal writes before syncing and returning receipts", async () => {
   const { name, file } = fixture();
-  // FileHandle.writeFile loops inside Node. Intercept its native write boundary,
-  // not writeFile's all-or-error contract. Restrict the fault to this journal fd.
-  const binding = (process as unknown as { binding(name: string): {
-    writeBuffer(fd: number, buffer: Buffer, offset: number, length: number, ...rest: unknown[]): unknown;
-  } }).binding("fs");
-  const originalWrite = binding.writeBuffer;
-  const originalOpen = fsp.open.bind(fsp);
-  let journalFd = -1;
   let writes = 0;
   let synced = false;
-  vi.spyOn(fsp, "open").mockImplementation(async (...args) => {
+  const durableFs = nodeHostEnv.durableFs;
+  const originalOpen = durableFs.open.bind(durableFs);
+  vi.spyOn(durableFs, "open").mockImplementation(async (...args) => {
     const handle = await originalOpen(...args);
     if (args[0] === file && args[1] === "a") {
-      journalFd = handle.fd;
-      const close = handle.close.bind(handle);
-      vi.spyOn(handle, "close").mockImplementation(async () => {
-        journalFd = -1;
-        await close();
+      const write = handle.write.bind(handle);
+      vi.spyOn(handle, "write").mockImplementation(async (buffer, offset, length, position) => {
+        writes++;
+        return write(buffer, offset, Math.min(length, 31), position);
       });
       const sync = handle.sync.bind(handle);
       vi.spyOn(handle, "sync").mockImplementation(async () => {
@@ -171,17 +186,9 @@ it("persists every batch row across legal native short writes before syncing and
     }
     return handle;
   });
-  binding.writeBuffer = function (fd, buffer, offset, length, ...rest) {
-    if (fd === journalFd) { writes++; length = Math.min(length, 31); }
-    return originalWrite.call(this, fd, buffer, offset, length, ...rest);
-  };
-  try {
-    const receipts = await journal.appendTeamEvents(name, [input("first"), input("second")]);
-    expect(writes).toBeGreaterThan(2);
-    expect(synced).toBe(true);
-    expect(receipts.map((event) => event.cursor)).toEqual(["1", "2"]);
-    expect(journal.readTeamEvents(name).events).toEqual(receipts);
-  } finally {
-    binding.writeBuffer = originalWrite;
-  }
+  const receipts = await journal.appendTeamEvents(name, [input("first"), input("second")]);
+  expect(writes).toBeGreaterThan(2);
+  expect(synced).toBe(true);
+  expect(receipts.map((event) => event.cursor)).toEqual(["1", "2"]);
+  expect(journal.readTeamEvents(name).events).toEqual(receipts);
 });

@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTeams from "../../extensions/index";
@@ -16,7 +17,7 @@ async function fixture(autoSyncEnabled: boolean) {
     undefined, undefined, undefined, undefined, undefined, undefined,
     { waitSeconds: 120, autoSyncEnabled, autoSyncDelaySeconds: 0, autoSyncUpdateThreshold: 1, policyVersion: "test" });
   config.logicalWorkers = [{ name: "worker", scope: "test scope" }];
-  teams.writeConfigAtomic(paths.configPath(name), config);
+  writeJsonFixture(paths.configPath(name), config);
   const lead = config.members.find((member) => member.name === "team-lead")!;
   await runtime.writeRuntimeStatus(name, "team-lead", { pid: process.pid, startedAt: Date.now() }, lead.membershipId);
   vi.stubEnv("PI_AGENT_NAME", ""); vi.stubEnv("PI_TEAM_NAME", name);

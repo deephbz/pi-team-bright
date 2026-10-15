@@ -7,8 +7,9 @@ import timers from "node:timers";
 import timerPromises from "node:timers/promises";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
+import { createNodeDurableFileSystem, type DurableFileSystem } from "../src/env/host-env";
 
-interface Scope { root: string; canonicalRoot: string; actor?: string; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Map<number, string>; afterFsync: (file: string) => void; scheduleFs: (actor: string, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> }
+interface Scope { root: string; canonicalRoot: string; actor?: string; generation?: object; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Map<number, string>; afterFsync: (file: string) => void; generationForActor: (actor: string) => object | undefined; generationIsLive: (actor: string, generation: object) => boolean; scheduleFs: (actor: string, generation: object, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> }
 const active = new AsyncLocalStorage<Scope>();
 const real = { exists: fs.existsSync, realpath: fs.realpathSync, lstat: fs.lstatSync };
 let users = 0;
@@ -98,10 +99,13 @@ function install(): void {
     const scope = active.getStore();
     if (!scope) return original.apply(this, args);
     const actor = scope.actor;
-    if (!actor) return fail(scope, `Async filesystem operation has no actor: ${name}`);
-    return scope.scheduleFs(actor, `fs.promises.${name}`, () => {
+    const generation = scope.generation;
+    if (!actor || !generation) return fail(scope, `Async filesystem operation has no actor generation: ${name}`);
+    if (!scope.generationIsLive(actor, generation)) return fail(scope, `Stale actor generation requested filesystem operation: ${name}`);
+    return scope.scheduleFs(actor, generation, `fs.promises.${name}`, () => {
       if (typeof args[0] !== "number") checkPath(scope, args[0]);
-      const result = (fs as any)[`${name}Sync`](...args);
+      if (name === "rename" && typeof args[2] === "function") args[2]();
+      const result = (fs as any)[`${name}Sync`](...args.slice(0, 2));
       if (name === "open") return scheduledFileHandle(scope, result);
       return result;
     }, () => Object.assign(new Error("Scheduled filesystem operation cancelled with its actor"), { code: "ECANCELED" }));
@@ -113,8 +117,10 @@ function install(): void {
 function scheduledFileHandle(scope: Scope, fd: number): object {
   const run = (name: string, action: () => unknown) => {
     const actor = scope.actor;
-    if (!actor) return Promise.reject(new Error(`Async filesystem handle has no actor: ${name}`));
-    return scope.scheduleFs(actor, `fs.FileHandle.${name}`, () => active.run(scope, action), () => Object.assign(new Error("Scheduled file handle operation cancelled with its actor"), { code: "ECANCELED" }));
+    const generation = scope.generation;
+    if (!actor || !generation) return Promise.reject(new Error(`Async filesystem handle has no actor generation: ${name}`));
+    if (!scope.generationIsLive(actor, generation)) return Promise.reject(fail(scope, `Stale actor generation requested file handle operation: ${name}`));
+    return scope.scheduleFs(actor, generation, `fs.FileHandle.${name}`, () => active.run(scope, action), () => Object.assign(new Error("Scheduled file handle operation cancelled with its actor"), { code: "ECANCELED" }));
   };
   return {
     writeFile: (data: any, options?: any) => run("writeFile", () => fs.writeFileSync(fd, data, options)),
@@ -135,19 +141,28 @@ function scheduledFileHandle(scope: Scope, fd: number): object {
   };
 }
 
+/** The simulator adapter uses the same typed operations; HostGuard schedules each underlying Node operation. */
+export function createSimulatedDurableFileSystem(): DurableFileSystem {
+  return {
+    ...createNodeDurableFileSystem(),
+    rename: (from, to, beforeCommit) => (fsp.rename as any)(from, to, beforeCommit),
+  };
+}
+
 /** Guards runtime actor work. Module loading and world setup happen before entering this boundary. */
 export class HostGuard {
   readonly violations: string[] = [];
   private readonly failures: Error[] = [];
   private readonly scope: Scope;
   private disposed = false;
-  constructor(root: string, changed: (file: string) => void, afterFsync: (file: string) => void = () => {}, scheduleFs: (actor: string, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> = (_actor, label) => Promise.reject(new Error(`Async filesystem completion has no scheduler: ${label}`))) {
-    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Map(), afterFsync, scheduleFs };
+  constructor(root: string, changed: (file: string) => void, afterFsync: (file: string) => void = () => {}, generationForActor: (actor: string) => object | undefined = () => undefined, generationIsLive: (actor: string, generation: object) => boolean = () => false, scheduleFs: (actor: string, generation: object, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> = (_actor, _generation, label) => Promise.reject(new Error(`Async filesystem completion has no scheduler: ${label}`))) {
+    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Map(), afterFsync, generationForActor, generationIsLive, scheduleFs };
     if (users++ === 0) install();
   }
   run<T>(action: () => T, actor?: string): T {
     if (this.disposed) throw new Error("World is disposed");
-    return active.run({ ...this.scope, actor }, action);
+    const generation = actor ? this.scope.generationForActor?.(actor) : undefined;
+    return active.run({ ...this.scope, actor, generation }, action);
   }
   assertClean(): void { if (this.violations.length) throw new Error(`Host escape: ${this.violations.join("; ")}`, { cause: this.failures[0] }); }
   dispose(): void {

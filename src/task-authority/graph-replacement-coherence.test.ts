@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "../utils/test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,11 +15,9 @@ import {
   suppressTaskVersionForSession,
   TaskChangeDelivery,
 } from "../utils/task-delivery";
-import { writeConfigAtomic } from "../utils/teams";
 import { readGraphRevisionRetirement, recordGraphRevisionRetirement } from "../utils/graph-revision-retirement";
 import type { TeamConfig } from "../team-authority/contracts";
 import { GraphTaskController, type GraphApplyInput, type GraphControlSnapshot } from "./graph-control";
-import { writeJsonAtomic } from "../utils/atomic-json";
 import { DurableGraphTaskOrchestration } from "./graph-orchestration";
 import { taskVersionRef, type TaskVersionRef } from "./task-version-ref";
 
@@ -48,8 +47,8 @@ function fixture(suffix: string) {
     }],
   };
   fs.mkdirSync(teamDir(teamName), { recursive: true });
-  writeJsonAtomic(graphTaskAuthorityPath(teamName), new GraphTaskController().snapshot());
-  writeConfigAtomic(configPath(teamName), config);
+  writeJsonFixture(graphTaskAuthorityPath(teamName), new GraphTaskController().snapshot());
+  writeJsonFixture(configPath(teamName), config);
   const publication = new DurableTaskMutationPublication();
   const authority = new DurableGraphTaskAuthority();
   const orchestration = new DurableGraphTaskOrchestration(authority, publication, publication, publication);
@@ -337,7 +336,7 @@ describe("complete graph replacement coherence", () => {
       relations: [],
       dependency_state: { kind: "ready" as const, active_blocker_ids: [] },
     };
-    writeJsonAtomic(taskDeliveryRecoveryPath(teamName), [{
+    writeJsonFixture(taskDeliveryRecoveryPath(teamName), [{
       teamName, taskId: task.id, taskVersion: version, recipients: ["worker"], changeKind: "assigned",
       recordedAt: "2026-08-13T00:00:00.000Z", reason: "enqueue-failed", taskProjection: task,
     }]);
@@ -374,7 +373,7 @@ describe("complete graph replacement coherence", () => {
     const { teamName } = fixture("derived-version-stores");
     const stale = deliveryTask("retained", "retained-derived-v1");
     const current = deliveryTask("retained", "retained-derived-v2", { goal: "Use the revised retained contract." });
-    writeJsonAtomic(taskDeliveryRecoveryPath(teamName), [{
+    writeJsonFixture(taskDeliveryRecoveryPath(teamName), [{
       teamName, taskId: stale.id, taskVersion: stale.version, recipients: ["worker"], changeKind: "assigned",
       recordedAt: "2026-08-13T00:00:00.000Z", reason: "enqueue-failed", taskProjection: stale,
     }]);
@@ -618,7 +617,7 @@ describe("complete graph replacement coherence", () => {
     ];
     const config = JSON.parse(fs.readFileSync(configPath(teamName), "utf8")) as TeamConfig;
     config.logicalWorkers = [...new Set(tasks.map((task) => task.assignee))].map((name) => ({ name, scope: `Execute ${name}.` }));
-    writeConfigAtomic(configPath(teamName), config);
+    writeJsonFixture(configPath(teamName), config);
     const initial = await orchestration.applyGraph(teamName, { operationId: "matrix-initial", tasks });
     if (initial.kind !== "applied") throw new Error(initial.message);
     const applyTransition = async (taskId: string, transition: "claim" | "goal_achieved" | "goal_failed", operationId: string, evidence?: string) => {

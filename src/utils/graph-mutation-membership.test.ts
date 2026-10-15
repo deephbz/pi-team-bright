@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import path from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -61,12 +62,12 @@ for (const [actor, toolName] of [["worker", "task_update"], ["team-lead", "task_
       await teams.withCurrentMembershipLease(f.name, member.membershipId!, () => teams.deactivateMembership(f.name, member.membershipId!, "replaced"));
       const replacement = { ...member, membershipId: "replacement", sessionFile: "/synthetic/replacement", isActive: true };
       if (actor === "team-lead") {
-        const config = await teams.readConfig(f.name); config.members.push(replacement); teams.writeConfigAtomic(paths.configPath(f.name), config);
+        const config = await teams.readConfig(f.name); config.members.push(replacement); writeJsonFixture(paths.configPath(f.name), config);
       } else await teams.addMember(f.name, replacement);
     } else {
       const config = await teams.readConfig(f.name);
       config.members.find(candidate => candidate.membershipId === member.membershipId)!.sessionFile = "/synthetic/resumed";
-      teams.writeConfigAtomic(paths.configPath(f.name), config);
+      writeJsonFixture(paths.configPath(f.name), config);
     }
     gate.resolve();
     expect((await operation).details).toMatchObject({ kind: "refused", state_changed: false });
@@ -95,7 +96,7 @@ it("holds the exact Membership lease through the registered graph commit", async
 it.each(["worker_stop", "team_shutdown"])("returns typed unavailable from registered %s on unsupported storage", async toolName => {
   const f = await fixture();
   fs.rmSync(path.dirname(paths.graphTaskAuthorityPath(f.name)), { recursive: true });
-  const config = await teams.readConfig(f.name); Object.assign(config, { taskBackend: "beads" }); teams.writeConfigAtomic(paths.configPath(f.name), config);
+  const config = await teams.readConfig(f.name); Object.assign(config, { taskBackend: "beads" }); writeJsonFixture(paths.configPath(f.name), config);
   const before = fs.readFileSync(paths.configPath(f.name));
   const result = await f.register("team-lead").get(toolName).execute("stop", toolName === "worker_stop" ? { worker: "worker" } : {}, undefined, undefined, f.context(f.leadSession));
   expect(result.details).toMatchObject({ kind: "unavailable", reason: "team_authority_unavailable", message: UNSUPPORTED_BEADS_TEAM, state_changed: false });

@@ -1,3 +1,4 @@
+import { writeJsonFixture } from "./test-write-json";
 import fs from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DurableGraphTaskAuthority } from "../adapters/durable-graph-task-authority";
@@ -9,6 +10,7 @@ import { DurableAlertMembership } from "../adapters/durable-alert-membership";
 import * as messaging from "../alert-authority/inbox-delivery";
 import * as paths from "./paths";
 import * as teams from "./teams";
+import { nodeHostEnv } from "../env/host-env";
 import { enqueueTaskChange, readTaskDeliveries, TASK_CHANGE_CUSTOM_TYPE, TASK_CHANGE_ACK_ENTRY_TYPE, TaskChangeDelivery } from "./task-delivery";
 
 const alertMembership = new DurableAlertMembership();
@@ -21,7 +23,7 @@ async function fixture(suffix: string) {
   await teams.createTeam(name, leadSession, `lead@${name}`);
   const config = await teams.readConfig(name);
   config.logicalWorkers = [{ name: "worker", scope: "Complete the Task criterion." }];
-  teams.writeConfigAtomic(paths.configPath(name), config);
+  writeJsonFixture(paths.configPath(name), config);
   const worker = { membershipId: teams.newMembershipId(), agentId: `worker@${name}`, name: "worker", agentType: "teammate" as const, joinedAt: Date.now(), sessionFile: workerSession, cwd: process.cwd(), subscriptions: [], isActive: true };
   await teams.addMember(name, worker);
   const authority = new DurableGraphTaskAuthority();
@@ -95,10 +97,10 @@ describe("graph-only public contracts", () => {
     const file = paths.taskDeliveryPath(name, "worker");
     fs.rmSync(file, { force: true });
     const before = fs.existsSync(file) ? fs.readFileSync(file, "utf8") : "absent";
-    const rename = fs.renameSync;
-    vi.spyOn(fs, "renameSync").mockImplementation((source, target) => {
+    const rename = nodeHostEnv.durableFs.rename.bind(nodeHostEnv.durableFs);
+    vi.spyOn(nodeHostEnv.durableFs, "rename").mockImplementation(async (source, target, beforeCommit) => {
       if (target === file) throw new Error("simulated rename failure");
-      return rename(source, target);
+      await rename(source, target, beforeCommit);
     });
     await expect(enqueueTaskChange(name, task, "task_changed", "team-lead"))
       .rejects.toThrow("simulated rename failure");
