@@ -8,7 +8,7 @@ import * as teams from "./teams";
 import * as paths from "./paths";
 import * as atomic from "./atomic-json";
 import { hostEnv } from "../env/host-env";
-import { enqueueTaskChange, reconcileTaskChanges, readTaskDeliveries, retireGraphRevisionDeliveries, TaskChangeDelivery } from "./task-delivery";
+import { enqueueTaskChange, reconcileTaskChanges, readTaskDeliveries, readCurrentTaskDeliveries, retireGraphRevisionDeliveries, TaskChangeDelivery } from "./task-delivery";
 import { diagnoseTeam, formatTeamStatus } from "./team-status";
 const names: string[] = [];
 async function fixture() {
@@ -45,6 +45,24 @@ it.each([false, true])("refuses live delivery after graph removal with derived f
     expect(sink.sendMessage).not.toHaveBeenCalled();
     expect(await readTaskDeliveries(f.name, "worker")).toHaveLength(1);
   } finally { delivery.stop(); }
+});
+
+it("classifies graph removal between the delivery lease check and observation identity", async () => {
+  const f = await fixture();
+  await enqueueTaskChange(f.name, f.task, "assigned");
+  const file = paths.graphTaskAuthorityPath(f.name);
+  const stat = fs.statSync;
+  let removed = false;
+  vi.spyOn(fs, "statSync").mockImplementation(((...args: Parameters<typeof fs.statSync>) => {
+    if (args[0] === file && !removed) {
+      removed = true;
+      fs.unlinkSync(file);
+    }
+    return stat(...args);
+  }) as typeof fs.statSync);
+  await expect(readCurrentTaskDeliveries(f.name, "worker")).rejects.toThrow("Restore its graph authority");
+  expect(removed).toBe(true);
+  expect(await readTaskDeliveries(f.name, "worker")).toHaveLength(1);
 });
 
 it("does not enqueue when the selected recovery target cannot persist", async () => {

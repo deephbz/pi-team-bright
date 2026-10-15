@@ -47,13 +47,29 @@ it.each(["reuse", "completion"])("refuses replaced authority at %s even when byt
     if (phase === "reuse") readGraphTaskCards(team);
   })).rejects.toThrow("Graph authority changed");
 });
-it("refuses deleted authority instead of serving the cached projection", async () => {
+it.each(["reuse", "completion"])("classifies deleted authority at %s instead of serving cached cards", async phase => {
   await fixture();
   await expect(withGraphReadView(async () => {
     readGraphTaskCards(team);
     fs.unlinkSync(graphTaskAuthorityPath(team));
-    readGraphTaskCards(team);
-  })).rejects.toThrow();
+    if (phase === "reuse") readGraphTaskCards(team);
+  })).rejects.toThrow("Restore its graph authority");
+});
+it.each(["observation", "commit"])("classifies graph removal during the %s source read", async operation => {
+  await fixture();
+  const file = graphTaskAuthorityPath(team);
+  const read = fs.readFileSync;
+  let removed = false;
+  vi.spyOn(fs, "readFileSync").mockImplementation(((...args: Parameters<typeof fs.readFileSync>) => {
+    if (args[0] === file && !removed) {
+      removed = true;
+      fs.unlinkSync(file);
+    }
+    return read(...args);
+  }) as typeof fs.readFileSync);
+  const action = operation === "observation" ? readGraphTaskCards : readGraphTaskCoordinates;
+  expect(() => action(team)).toThrow("Restore its graph authority");
+  expect(removed).toBe(true);
 });
 it("shares immutable projections across overlapping operation scopes", async () => {
   await fixture();

@@ -7,7 +7,7 @@ import { projectGraphTaskCards } from "../task-authority/graph-card";
 import { graphTaskAuthorityPath } from "./paths";
 import { missingGraphAuthority } from "./graph-authority-presence";
 
-interface ReadView { identity: string; tasks: GraphTaskCard[]; readyIds: string[] }
+interface ReadView { teamName: string; identity: string; tasks: GraphTaskCard[]; readyIds: string[] }
 interface ReadScope { views: Map<string, ReadView>; closed: boolean }
 const scope = new AsyncLocalStorage<ReadScope>();
 // One Team per process. Retain current cards and revision fingerprints only.
@@ -23,7 +23,7 @@ class GraphObservations {
   }
 
   read(teamName: string, file: string): ReadView {
-    const before = identity(file);
+    const before = identity(file, teamName);
     if (this.file === file && this.view?.identity === before) return this.view;
     if (this.file !== file) this.invalidate();
     this.view = undefined;
@@ -32,7 +32,7 @@ class GraphObservations {
       let state;
       try { state = this.recovery.recover(snapshot); }
       catch (error) { throw recoveryCorruption(error); }
-      const view = freeze({ identity: before, tasks: projectGraphTaskCards(state), readyIds: state.selectReadyFrontier().map(task => task.id) });
+      const view = freeze({ teamName, identity: before, tasks: projectGraphTaskCards(state), readyIds: state.selectReadyFrontier().map(task => task.id) });
       assertCurrent(file, view);
       this.file = file;
       return this.view = view;
@@ -44,15 +44,19 @@ class GraphObservations {
 }
 const observations = new GraphObservations();
 
-function identity(file: string): string {
+function identity(file: string, teamName: string): string {
   try {
     const stat = fs.statSync(file, { bigint: true });
     if (!stat.isFile() || stat.ino <= 0n || stat.mtimeNs <= 0n || stat.ctimeNs <= 0n) throw new Error("Graph authority file identity is unavailable.");
     return [stat.dev, stat.ino, stat.size, stat.mtimeNs, stat.ctimeNs].join(":");
-  } catch (error) { observations.invalidate(); throw error; }
+  } catch (error) {
+    observations.invalidate();
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw missingGraphAuthority(teamName);
+    throw error;
+  }
 }
 function assertCurrent(file: string, view: ReadView): void {
-  if (identity(file) !== view.identity) {
+  if (identity(file, view.teamName) !== view.identity) {
     observations.invalidate();
     throw new Error("Graph authority changed during observation; retry the operation.");
   }
@@ -138,6 +142,7 @@ function readGraphSnapshot(teamName: string): GraphControlSnapshot {
     const text = fs.readFileSync(file, "utf8");
     snapshot = JSON.parse(text) as GraphControlSnapshot;
   } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") throw missingGraphAuthority(teamName);
     throw new GraphSnapshotCorruption(`Graph authority snapshot cannot be decoded: ${error instanceof Error ? error.message : String(error)}`);
   }
   const legacyModelFields = snapshot as unknown as {
