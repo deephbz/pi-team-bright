@@ -297,10 +297,10 @@ pi install npm:@hypercarrier/pi-team-bright@0.23.1
 The carrier-liveness prerelease is on npm `next`:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.24.0-rc.3
+pi install npm:@hypercarrier/pi-team-bright@0.24.0-rc.4
 ```
 
-### Graph-only Task authority (0.24.0-rc.3)
+### Graph-only Task authority (0.24.0-rc.4)
 
 New Teams persist an explicit empty graph snapshot before creation succeeds.
 The first `task_graph_apply` creates its first graph revision. All Task reads,
@@ -312,7 +312,7 @@ Task operations and work-dependent stop or shutdown. It leaves `.beads/` data
 unchanged and supplies no export, migration, or fallback reader. Finish those
 Teams with their original version or preserve their stores and start new Teams.
 
-### Carrier-liveness upgrade (0.24.0-rc.3)
+### Carrier-liveness upgrade (0.24.0-rc.4)
 
 On macOS, the package's `postinstall` hook builds the process-generation helper
 from included Rust source. If `rustc` is missing, installation still succeeds.
