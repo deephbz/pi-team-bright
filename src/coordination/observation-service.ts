@@ -95,9 +95,14 @@ export class CoordinationObservationService {
     if (!bound?.config.syncLiveness) return { kind: "none" };
     return this.nudgeDebt.read({ ...bound, config: { ...bound.config, syncLiveness: bound.config.syncLiveness } }, ids);
   }
+  private withReadView<T>(action: () => Promise<T>): Promise<T> {
+    return this.coordinationQueries.taskStateDelivery.withReadView?.(action) ?? action();
+  }
   async readSnapshot(file: string, context?: CoordinationObservationContext): Promise<CoordinationSnapshotResult> {
-    const bound = await this.boundTeam(file);
-    return bound ? this.snapshot(bound, context) : { kind: "no_active_team" };
+    return this.withReadView(async () => {
+      const bound = await this.boundTeam(file);
+      return bound ? this.snapshot(bound, context) : { kind: "no_active_team" };
+    });
   }
   private async snapshot(bound: BoundTeam, context?: CoordinationObservationContext): Promise<CoordinationSnapshotResult> {
     const tasks = await this.readTaskProjectionOnce(bound.teamName);
@@ -119,10 +124,14 @@ export class CoordinationObservationService {
       ...(tasks.warnings.length ? { taskProjectionWarnings: tasks.warnings } : {}) };
   }
   async readTeamSync(file: string, view: "snapshot" | "updates", signal: AbortSignal, call: string, context?: CoordinationObservationContext): Promise<CoordinationSyncResult> {
-    return this.selected(file, view, signal, call, context, false) as Promise<CoordinationSyncResult>;
+    try {
+      return await this.withReadView(() => this.selected(file, view, signal, call, context, false)) as CoordinationSyncResult;
+    } catch (error) { this.discardPending(file, call); throw error; }
   }
   async readTeamSyncNow(file: string, view: "snapshot" | "updates", signal: AbortSignal, call: string, context?: CoordinationObservationContext): Promise<CoordinationSyncNowResult> {
-    return this.selected(file, view, signal, call, context, true);
+    try {
+      return await this.withReadView(() => this.selected(file, view, signal, call, context, true));
+    } catch (error) { this.discardPending(file, call); throw error; }
   }
   private async selected(file: string, view: "snapshot" | "updates", signal: AbortSignal, call: string, context: CoordinationObservationContext | undefined, automatic: boolean): Promise<CoordinationSyncNowResult> {
     if (signal.aborted) return { kind: "cancelled", message: "The observation was cancelled before native persistence." };
@@ -222,6 +231,9 @@ export class CoordinationObservationService {
     return workers.length ? { kind: "unsettled", ...common, workers } : { kind: "caught_up", ...common };
   }
   async peekTeamSync(file: string, view: "snapshot" | "updates", ids: string[]): Promise<CoordinationSyncProbe> {
+    return this.withReadView(() => this.peekTeamSyncOnce(file, view, ids));
+  }
+  private async peekTeamSyncOnce(file: string, view: "snapshot" | "updates", ids: string[]): Promise<CoordinationSyncProbe> {
     if (this.reservations.has(file)) return { kind: "indeterminate", message: "A Team observation is in progress." };
     const bound = await this.boundTeam(file);
     if (!bound) return { kind: "unavailable", reason: "no_active_team", message: "No active Team." };

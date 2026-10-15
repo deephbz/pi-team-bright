@@ -345,6 +345,7 @@ export class GraphTaskController {
   private readonly events: GraphControlEvent[];
   private readonly receipts: Map<string, StoredReceipt>;
   private commandRecordedAt?: string;
+  private derivedCache?: { revision?: GraphRevision; event?: GraphControlEvent; value: Map<string, DerivedTask> };
 
   constructor(snapshot?: GraphControlSnapshot, private readonly clock: () => Date = () => new Date(hostEnv().clock.now())) {
     if (snapshot && snapshot.schema !== "pi-team-bright-graph-control/1") {
@@ -511,13 +512,13 @@ export class GraphTaskController {
   }
 
   readTask(taskId: string): GraphTaskView {
-    const derived = this.derive().get(taskId);
+    const derived = this.derivedGraph().get(taskId);
     if (!derived) throw new GraphControlRefusal("task_not_found", `Task ${taskId} is not in the current graph.`);
     return this.toView(derived);
   }
 
   readTasks(): GraphTaskView[] {
-    return [...this.derive().values()].map(task => this.toView(task)).sort((left, right) => left.id.localeCompare(right.id));
+    return [...this.derivedGraph().values()].map(task => this.toView(task)).sort((left, right) => left.id.localeCompare(right.id));
   }
 
   readAttempts(taskId?: string): GraphAttemptView[] {
@@ -589,7 +590,7 @@ export class GraphTaskController {
     if (occupied) {
       throw new GraphControlRefusal("worker_occupied", `Worker ${task.assignee} already has in-progress Task ${occupied.id}.`);
     }
-    const derived = this.derive().get(task.id)!;
+    const derived = this.derivedGraph().get(task.id)!;
     const revision = this.currentRevision()!;
     const ordinal = derived.attemptsStarted + 1;
     this.append({
@@ -831,6 +832,17 @@ export class GraphTaskController {
       }
     }
     return attempts;
+  }
+
+  // Revisions and events are append-only. Their exact tail identities also fence
+  // rollback, so a failed command cannot leave a reusable speculative derivation.
+  private derivedGraph(): Map<string, DerivedTask> {
+    const revision = this.currentRevision();
+    const event = this.events.at(-1);
+    if (this.derivedCache && this.derivedCache.revision === revision && this.derivedCache.event === event) return this.derivedCache.value;
+    const value = this.derive();
+    this.derivedCache = { revision, event, value };
+    return value;
   }
 
   private derive(): Map<string, DerivedTask> {

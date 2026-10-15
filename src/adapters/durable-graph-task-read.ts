@@ -5,12 +5,15 @@ import type {
 } from "../coordination/queries";
 import type { GraphTaskOrchestrationPort } from "../task-authority/graph-orchestration";
 import { readCurrentTaskDeliveries } from "../utils/task-delivery";
+import { withGraphReadView } from "../utils/graph-read-view";
 
 /** Required graph-authority reads with derived delivery evidence. */
 export class DurableGraphTaskStateDeliveryQuery implements CoordinationTaskStateDeliveryQuery {
   constructor(
     private readonly graph: GraphTaskOrchestrationPort,
   ) {}
+
+  withReadView<T>(action: () => Promise<T>): Promise<T> { return withGraphReadView(action); }
 
   completeTaskSet(_teamName: string): boolean { return true; }
 

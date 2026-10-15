@@ -13,6 +13,7 @@ import {
 import type { GraphTaskCard } from "../task-authority/graph-control-schemas";
 import { projectGraphTaskCards as cards } from "../task-authority/graph-card";
 import { writeJsonAtomic } from "../utils/atomic-json";
+import { loadGraphController, readGraphTaskCards } from "../utils/graph-read-view";
 import { withLock } from "../utils/lock";
 import { configPath, graphTaskAuthorityPath, teamDir } from "../utils/paths";
 import { withCurrentSessionBinding } from "../utils/teams";
@@ -109,8 +110,7 @@ export class DurableGraphTaskAuthority {
   async readTasks(teamName: string, taskIds?: readonly string[]): Promise<GraphTaskCard[]> {
     if (!this.exists(teamName)) throw missingAuthority(teamName);
     return withLock(graphTaskAuthorityPath(teamName), async () => {
-      const controller = this.loadRequired(teamName);
-      const all = cards(controller);
+      const all = readGraphTaskCards(teamName);
       if (!taskIds) return all;
       const byId = new Map(all.map((task) => [task.id, task]));
       return taskIds.flatMap((taskId) => byId.get(taskId) ?? []);
@@ -201,32 +201,6 @@ export class DurableGraphTaskAuthority {
   }
 
   private load(teamName: string): GraphTaskController {
-    const file = graphTaskAuthorityPath(teamName);
-    if (!fs.existsSync(file)) throw missingAuthority(teamName);
-    let snapshot: GraphControlSnapshot;
-    try {
-      snapshot = JSON.parse(fs.readFileSync(file, "utf8")) as GraphControlSnapshot;
-    } catch (error) {
-      throw new GraphSnapshotCorruption(`Graph authority snapshot cannot be decoded: ${error instanceof Error ? error.message : String(error)}`);
-    }
-    const legacyModelFields = snapshot as unknown as {
-      modelAliases?: unknown;
-      graphRevisions?: Array<{ tasks?: Array<Record<string, unknown>> }>;
-      events?: Array<Record<string, unknown>>;
-    } | null;
-    if (legacyModelFields && (legacyModelFields.modelAliases !== undefined
-      || (Array.isArray(legacyModelFields.graphRevisions)
-        && legacyModelFields.graphRevisions.some((revision) => Array.isArray(revision?.tasks)
-          && revision.tasks.some((task) => task?.modelAlias !== undefined || task?.model !== undefined)))
-      || (Array.isArray(legacyModelFields.events)
-        && legacyModelFields.events.some((event) => event?.kind === "attempt_started"
-          && (event.modelAlias !== undefined || event.resolvedModel !== undefined))))) {
-      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot contains removed Task model selection fields; migration is not supported.");
-    }
-    try {
-      return GraphTaskController.recover(snapshot);
-    } catch (error) {
-      throw new GraphSnapshotCorruption(`Graph authority snapshot cannot be recovered: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    return loadGraphController(teamName);
   }
 }
