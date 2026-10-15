@@ -1,4 +1,5 @@
 import { hostEnv } from "../env/host-env";
+import { readProcessGeneration } from "../env/async-process-generation";
 import * as paths from "../utils/paths";
 import * as runtime from "../utils/runtime";
 import * as teams from "../utils/teams";
@@ -26,9 +27,9 @@ function exactRuntimeGeneration(member: Member, status: runtime.AgentRuntimeStat
   return member.membershipId && generation?.membershipId === member.membershipId ? generation : null;
 }
 
-function exactBoundProcessAlreadyExited(generation: runtime.RuntimeGeneration | null): boolean {
-  if (!generation || generation.pid === hostEnv().process.pid) return false;
-  return runtime.verifyRuntimeGeneration(generation) === "gone";
+async function exactBoundProcessAlreadyExited(generation: runtime.RuntimeGeneration | null): Promise<boolean> {
+  if (!generation || !generation.osBirthToken || !generation.bootId || generation.pid === hostEnv().process.pid) return false;
+  return runtime.verifyRuntimeGeneration(generation, await readProcessGeneration(generation.pid)) === "gone";
 }
 
 export class TeamLifecycleService {
@@ -122,7 +123,7 @@ export class TeamLifecycleService {
     const status = await runtime.readRuntimeStatus(teamName, member.name);
     const observedGeneration = exactRuntimeGeneration(member, status);
     if (status?.membershipId === member.membershipId && status.lastStop && ["new", "resume", "fork"].includes(status.lastStop.piReason)) return;
-    if (exactBoundProcessAlreadyExited(observedGeneration)) {
+    if (await exactBoundProcessAlreadyExited(observedGeneration)) {
       const deleted = await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration!);
       if (!deleted) throw new Error(`Cannot confirm shutdown of ${member.name}: its runtime process generation changed after exit evidence. The Membership remains current; inspect the resumed process and retry.`);
       return;

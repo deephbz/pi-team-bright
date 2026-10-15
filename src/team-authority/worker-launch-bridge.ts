@@ -1,3 +1,4 @@
+import { readProcessGeneration } from "../env/async-process-generation";
 import { hostEnv, type TimerHandle } from "../env/host-env";
 import path from "node:path";
 import * as teams from "../utils/teams";
@@ -121,7 +122,10 @@ export class WorkerLaunchBridge {
       return teams.withCurrentMembershipLease(request.teamName, member.membershipId!, async current => {
         const status = await runtime.readRuntimeStatus(request.teamName, member.name);
         assertLockDeadline();
-        const view = deriveCarrierView(current, status);
+        const probe = status?.membershipId === current.membershipId && status?.pid
+          ? await readProcessGeneration(status.pid) : { kind: "unknown" as const, reason: "runtime_missing" };
+        assertLockDeadline();
+        const view = deriveCarrierView(current, status, hostEnv().clock.now(), probe);
         const plan = planWorkerEnsure(normalizeWorkerCarrier(current), view);
         // Even a bound dead prior generation cannot bypass an in-flight recovery.
         const pending = launchIsOutstanding(current, status);

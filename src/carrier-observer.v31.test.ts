@@ -1,5 +1,5 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import { nodeHostEnv, runWithHostEnv } from "./env/host-env";
+import { nodeHostEnv, runWithHostEnv, type GenerationProbe } from "./env/host-env";
 const f = vi.hoisted(() => ({ now: 1000, events: [] as any[], status: {} as any, member: {} as any, blocked: false, activity: "idle", outage: false, noAgent: false, paneId: "pane", panePresent: true, configFailure: false, journalFailure: false, appendFailures: 0, leaseFailures: 0, beforeLease: undefined as undefined | (() => void) }));
 vi.mock("node:fs", async importOriginal => {
   const actual = await importOriginal<typeof import("node:fs")>();
@@ -25,7 +25,7 @@ import { projectionLines } from "./model-tool-contract/tui-message-projection";
 import { projectToolTuiMessage } from "./model-tool-contract/tui-projection";
 import { formatCarrierStatus } from "./utils/team-status";
 const env = () => ({ ...nodeHostEnv, clock: { ...nodeHostEnv.clock, now: () => f.now, setTimeout: (() => 0) as any, clearTimeout: () => {} }, process: { ...nodeHostEnv.process,
-  generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid, { kind: "found" as const, generation: { pid, osBirthToken: "birth", bootId: "boot" } }])),
+  generations: async (pids: readonly number[]): Promise<Map<number, GenerationProbe>> => new Map(pids.map(pid => [pid, { kind: "found" as const, generation: { pid, osBirthToken: "birth", bootId: "boot" } }])),
 }, exec: { ...nodeHostEnv.exec, run: vi.fn(async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "", stdout: JSON.stringify(f.outage ? { error: "offline" } : { result: args[0] === "agent" ? { agents: f.noAgent ? [] : [{ pane_id: "pane", name: "team-worker", agent_session: { source: "herdr:pi", agent: "pi", kind: "path", value: "/session" }, agent_status: f.blocked ? "blocked" : f.activity }] } : { panes: f.panePresent ? [{ pane_id: f.paneId }] : [] } }) })) } });
 beforeEach(() => {
   f.now = 1000; f.events = []; f.noAgent = false; f.paneId = "pane"; f.panePresent = true; f.blocked = false; f.activity = "idle"; f.outage = false; f.configFailure = false; f.journalFailure = false; f.appendFailures = 0; f.leaseFailures = 0; f.beforeLease = undefined;
@@ -145,8 +145,22 @@ function syncService() {
     readEvents: () => ({ events: f.events, cursor: String(f.events.length), headCursor: String(f.events.length), truncated: false, remaining: 0 }),
   });
 }
+it.each([17, 50])("batches %i Coordination runtime reads through one async provider call", async count => {
+  const host = env();
+  const generations = vi.fn(host.process.generations);
+  host.process.generations = generations;
+  host.process.generation = () => { throw new Error("sync generation reached"); };
+  await runWithHostEnv(host, async () => {
+    const query = new DurableCoordinationTeamRuntimeQuery();
+    const results = await Promise.all(Array.from({ length: count }, () => query.readRuntime("team", f.member)));
+    expect(results).toHaveLength(count);
+    expect(generations).toHaveBeenCalledExactlyOnceWith([42]);
+    expect(results.every(result => result?.pid === 42)).toBe(true);
+  });
+});
 it("retries predecessor exit publication without duplicate accepted death", async () => {
   const host = env(); host.process.generation = () => ({ kind: "absent" });
+  host.process.generations = async pids => new Map(pids.map(pid => [pid, host.process.generation(pid)]));
   await runWithHostEnv(host, async () => {
     f.appendFailures = 1;
     await expect(publishPredecessorExit("team", f.member, f.status, "herdr")).rejects.toThrow("EIO");
@@ -159,6 +173,7 @@ it("retries predecessor exit publication without duplicate accepted death", asyn
 });
 it("refuses predecessor publication without verified death or matching runtime coordinates", async () => {
   const host = env(); host.process.generation = () => ({ kind: "unknown", reason: "offline" });
+  host.process.generations = async pids => new Map(pids.map(pid => [pid, host.process.generation(pid)]));
   await runWithHostEnv(host, async () => {
     await expect(publishPredecessorExit("team", f.member, f.status, "herdr")).rejects.toThrow("not verified");
     host.process.generation = () => ({ kind: "absent" });

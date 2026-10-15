@@ -1,4 +1,5 @@
 import { hostEnv } from "../env/host-env";
+import { readProcessGeneration } from "../env/async-process-generation";
 import fs from "node:fs";
 import path from "node:path";
 import * as paths from "../utils/paths";
@@ -51,14 +52,15 @@ export class TeamSessionLifecycleService {
         return { kind: "refused", reason: "Startup belongs to a superseded launchId.", exitProcess: true };
       }
       const status = await runtime.readRuntimeStatus(input.teamName, input.workerName);
+      const [observed, own] = await Promise.all([readProcessGeneration(status?.pid ?? 0), readProcessGeneration(hostEnv().process.pid)]);
       if (this.stopSequence !== stopSequence || JSON.stringify(status?.lastStop) !== stopAtEntry) return { kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false };
-      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, status, hostEnv().process.pid, undefined, input.launchId);
+      const runtimeAdmission = runtime.admitRuntimeStartup(current, input.sessionFile, status, hostEnv().process.pid, undefined, input.launchId, observed);
       if (runtimeAdmission.kind === "refused") {
         recordWorkerLaunchStage("runtime_admission_refused", { membershipId: current.membershipId! });
         return { ...runtimeAdmission, exitProcess: true };
       }
       if (runtimeAdmission.action === "already_current") {
-        const identity = runtime.ownBirthIdentity();
+        const identity = runtime.ownBirthIdentity(own);
         if (status && (status.lastStop || (identity.osBirthToken && status.osBirthToken !== identity.osBirthToken))) await runtime.writeRuntimeStatus(input.teamName, input.workerName, { ...identity, lastStop: undefined }, current.membershipId);
         return { kind: "admitted", action: "already_current", member: current };
       }
@@ -68,7 +70,7 @@ export class TeamSessionLifecycleService {
         teamName: input.teamName, member: current, status, terminalBackend: config.terminalBackend,
       });
       const startedAt = hostEnv().clock.now();
-      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined, lastStop: undefined, stopRequested: undefined }, current.membershipId);
+      await runtime.writeRuntimeStatus(input.teamName, input.workerName, { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(own), startedAt, lastHeartbeatAt: startedAt, ready: false, lastError: undefined, lastStop: undefined, stopRequested: undefined }, current.membershipId);
       recordWorkerLaunchStage("runtime_generation_claimed", { membershipId: current.membershipId! });
       const bound = await teams.bindMemberSession(input.teamName, input.workerName, input.sessionFile, current.sessionFile ? undefined : input.launchId, admission.update ?? {}, current.membershipId);
       recordWorkerLaunchStage("session_bound_persisted", { membershipId: bound.membershipId! });
@@ -88,18 +90,19 @@ export class TeamSessionLifecycleService {
     if (!lead.membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
     return teams.withCurrentMembershipLease(input.teamName, lead.membershipId, async (lead) => {
       const status = await runtime.readRuntimeStatus(input.teamName, "team-lead");
+      const [observed, own] = await Promise.all([readProcessGeneration(status?.pid ?? 0), readProcessGeneration(hostEnv().process.pid)]);
       if (this.stopSequence !== stopSequence || JSON.stringify(status?.lastStop) !== stopAtEntry) return { kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false };
-      const runtimeAdmission = input.allowFirstRuntimeGeneration && status === null ? { kind: "admitted" as const, action: "claim" as const } : runtime.admitRuntimeStartup(lead, input.sessionFile, status);
+      const runtimeAdmission = input.allowFirstRuntimeGeneration && status === null ? { kind: "admitted" as const, action: "claim" as const } : runtime.admitRuntimeStartup(lead, input.sessionFile, status, hostEnv().process.pid, undefined, undefined, observed);
       if (runtimeAdmission.kind === "refused") return { ...runtimeAdmission, exitProcess: true };
       if (runtimeAdmission.action === "already_current") {
-        const identity = runtime.ownBirthIdentity();
+        const identity = runtime.ownBirthIdentity(own);
         if (status && (status.lastStop || (identity.osBirthToken && status.osBirthToken !== identity.osBirthToken))) await runtime.writeRuntimeStatus(input.teamName, "team-lead", { ...identity, lastStop: undefined }, lead.membershipId);
         return { kind: "admitted", action: "already_current", member: lead };
       }
       const membershipId = lead.membershipId;
       if (!membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
       const startedAt = hostEnv().clock.now();
-      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(), startedAt, lastStop: undefined, stopRequested: undefined }, membershipId);
+      await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(own), startedAt, lastStop: undefined, stopRequested: undefined }, membershipId);
       if (admission.update) await teams.updateMembership(input.teamName, membershipId, admission.update);
       const recordPath = paths.leadSessionPath(input.teamName);
       const dir = path.dirname(recordPath);

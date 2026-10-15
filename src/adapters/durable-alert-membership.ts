@@ -1,4 +1,5 @@
-import { currentDeliveryDegradations, readRuntimeStatus } from "../utils/runtime";
+import { readProcessGeneration } from "../env/async-process-generation";
+import { currentDeliveryDegradations, verifyRuntimeGeneration, readRuntimeStatus } from "../utils/runtime";
 import { readConfig, teamExists, withCurrentConfig } from "../utils/teams";
 import type {
   AlertCurrentDelivery,
@@ -43,7 +44,11 @@ export class DurableAlertMembership implements AlertMembershipPort {
       )) return { kind: "sender_stale" };
       // Delivery health is diagnostic. Missing evidence cannot refuse a durable send.
       const deliveryDegraded = await readRuntimeStatus(input.teamName, recipient.name)
-        .then(status => currentDeliveryDegradations(recipient, status)).catch(() => []);
+        .then(async status => {
+          const verified = status?.pid && status.osBirthToken && status.bootId
+            ? verifyRuntimeGeneration(status, await readProcessGeneration(status.pid)) : "unknown";
+          return currentDeliveryDegradations(recipient, status, verified);
+        }).catch(() => []);
       return {
         kind: "delivered",
         value: await append({

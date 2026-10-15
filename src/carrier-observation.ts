@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { readProcessGeneration } from "./env/async-process-generation";
 import { herdrPiSessionPath } from "./adapters/herdr-session";
 import { herdrCarrierName } from "./adapters/herdr-adapter";
 import { hostEnv, type TimerHandle, type GenerationProbe } from "./env/host-env";
@@ -371,7 +372,7 @@ class CarrierPublication {
  */
 export async function publishPredecessorExit(teamName: string, member: Member, status: AgentRuntimeStatus, teamBackend?: string): Promise<void> {
   const current = { ...member, terminalTarget: memberTerminalTarget(member, teamBackend) };
-  const view = deriveCarrierView(current, status);
+  const view = deriveCarrierView(current, status, hostEnv().clock.now(), await readProcessGeneration(status.pid ?? 0));
   if (view.process !== "gone") throw new Error("Predecessor exit is not verified; runtime replacement cannot proceed.");
   if (!await new CarrierPublication(teamName).publishUnderLease(current, view, "process", "gone", status)) {
     throw new Error("Predecessor coordinates changed; runtime replacement cannot proceed.");
