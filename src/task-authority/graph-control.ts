@@ -356,9 +356,9 @@ export class GraphTaskController {
     this.receipts = new Map((snapshot?.receipts ?? []).map(receipt => [receipt.operationId, clone(receipt)]));
   }
 
-  static recover(snapshot: GraphControlSnapshot, clock?: () => Date): GraphTaskController {
+  static recover(snapshot: GraphControlSnapshot, clock?: () => Date, validation?: GraphSnapshotValidator): GraphTaskController {
     try {
-      validateSnapshot(snapshot);
+      (validation ?? new GraphSnapshotValidator()).validate(snapshot);
     } catch (error) {
       if (error instanceof GraphControlRefusal) throw error;
       throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot is malformed: ${error instanceof Error ? error.message : String(error)}`);
@@ -957,7 +957,74 @@ export class GraphTaskController {
   }
 }
 
-function validateSnapshot(snapshot: GraphControlSnapshot): void {
+/** Optional read-side reuse of a fully validated JSON revision prefix. Store only
+ * fingerprints. Every recovery still checks global structure, events and receipts.
+ * A changed/truncated prefix or any failure discards reuse and validates in full.
+ */
+export class GraphSnapshotValidator {
+  private accepted?: string[];
+
+  constructor(private readonly reuseRevisions = false) {}
+
+  validate(snapshot: GraphControlSnapshot): void {
+    try {
+      let fingerprints: string[] | undefined;
+      if (this.reuseRevisions && Array.isArray(snapshot?.graphRevisions)) {
+        try { fingerprints = snapshot.graphRevisions.map(revision => this.revisionFingerprint(revision)); }
+        catch { this.accepted = undefined; }
+      }
+      const prior = this.accepted;
+      const unchangedPrefix = fingerprints && prior && fingerprints.length >= prior.length
+        && prior.every((fingerprint, index) => fingerprint === fingerprints[index]);
+      validateSnapshot(snapshot, unchangedPrefix ? prior.length : 0,
+        (revision, previous) => this.validateRevision(revision, previous));
+      this.accepted = fingerprints;
+    } catch (error) { this.accepted = undefined; throw error; }
+  }
+
+  private revisionFingerprint(revision: GraphRevision): string {
+    return createHash("sha256").update(JSON.stringify(revision) ?? "undefined").digest("hex");
+  }
+
+  private validateRevision(revision: GraphRevision, previousRevision?: GraphRevision): void {
+    validateGraphRevision(revision, previousRevision);
+  }
+}
+
+function validateGraphRevision(revision: GraphRevision, previousRevision?: GraphRevision): void {
+  if (!revision || typeof revision.version !== "string" || !Array.isArray(revision.tasks)) {
+    throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid graph revision.");
+  }
+  const normalized = normalizeAndValidate(revision.tasks.map((task) => ({
+    key: task.key,
+    title: task.title,
+    goal: task.goal,
+    assignee: task.assignee,
+    needs: task.needs,
+    ...(task.onGoalFailed ? { onGoalFailed: task.onGoalFailed } : {}),
+  })));
+  if (normalized.length !== revision.tasks.length
+    || normalized.some((task) => !revision.tasks.find((stored) => stored.key === task.key)?.lineage?.trim())) {
+    throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid Task lineage.");
+  }
+  const previousTasks = new Map(previousRevision?.tasks.map((task) => [task.key, task]) ?? []);
+  for (const task of revision.tasks) {
+    const prior = previousTasks.get(task.key);
+    const sameMeaning = prior && digest(semanticDefinition(prior)) === digest(semanticDefinition(task));
+    const expectedLineage = sameMeaning
+      ? prior.lineage
+      : digest({ task: semanticDefinition(task), introducedAt: revision.sequence });
+    if (task.lineage !== expectedLineage) {
+      throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot has invalid lineage for Task ${task.key}.`);
+    }
+  }
+  if (revision.version !== graphVersion({ previous: previousRevision?.version ?? null, tasks: revision.tasks })) {
+    throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid graph version.");
+  }
+}
+
+function validateSnapshot(snapshot: GraphControlSnapshot, validatedPrefixLength: number,
+  validateRevision: (revision: GraphRevision, previous?: GraphRevision) => void): void {
   if (!snapshot || snapshot.schema !== "pi-team-bright-graph-control/1"
     || !Array.isArray(snapshot.graphRevisions)
     || !Array.isArray(snapshot.events)
@@ -980,36 +1047,8 @@ function validateSnapshot(snapshot: GraphControlSnapshot): void {
     throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot repeats a graph version.");
   }
   let previousRevision: GraphRevision | undefined;
-  for (const revision of snapshot.graphRevisions) {
-    if (!revision || typeof revision.version !== "string" || !Array.isArray(revision.tasks)) {
-      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid graph revision.");
-    }
-    const normalized = normalizeAndValidate(revision.tasks.map((task) => ({
-      key: task.key,
-      title: task.title,
-      goal: task.goal,
-      assignee: task.assignee,
-      needs: task.needs,
-      ...(task.onGoalFailed ? { onGoalFailed: task.onGoalFailed } : {}),
-    })));
-    if (normalized.length !== revision.tasks.length
-      || normalized.some((task) => !revision.tasks.find((stored) => stored.key === task.key)?.lineage?.trim())) {
-      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid Task lineage.");
-    }
-    const previousTasks = new Map(previousRevision?.tasks.map((task) => [task.key, task]) ?? []);
-    for (const task of revision.tasks) {
-      const prior = previousTasks.get(task.key);
-      const sameMeaning = prior && digest(semanticDefinition(prior)) === digest(semanticDefinition(task));
-      const expectedLineage = sameMeaning
-        ? prior.lineage
-        : digest({ task: semanticDefinition(task), introducedAt: revision.sequence });
-      if (task.lineage !== expectedLineage) {
-        throw new GraphControlRefusal("invalid_graph", `Graph authority snapshot has invalid lineage for Task ${task.key}.`);
-      }
-    }
-    if (revision.version !== graphVersion({ previous: previousRevision?.version ?? null, tasks: revision.tasks })) {
-      throw new GraphControlRefusal("invalid_graph", "Graph authority snapshot has an invalid graph version.");
-    }
+  for (const [index, revision] of snapshot.graphRevisions.entries()) {
+    if (index >= validatedPrefixLength) validateRevision(revision, previousRevision);
     previousRevision = revision;
   }
   const operations = new Set<string>();
