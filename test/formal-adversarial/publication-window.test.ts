@@ -12,7 +12,7 @@ import { projectNonterminalTaskIds, projectTaskChanges } from "../../src/coordin
 import { readGraphRevisionRetirement } from "../../src/utils/graph-revision-retirement";
 import { configPath, graphTaskAuthorityPath, teamDir } from "../../src/utils/paths";
 import { readCurrentTaskDeliveries, TaskChangeDelivery } from "../../src/utils/task-delivery";
-import { writeConfigAtomic } from "../../src/utils/teams";
+import { writeJsonFixture } from "../../src/utils/test-write-json";
 import type { TeamConfig } from "../../src/team-authority/contracts";
 
 const teams: string[] = [];
@@ -36,7 +36,7 @@ function fixture(suffix: string) {
   };
   fs.mkdirSync(path.dirname(graphTaskAuthorityPath(teamName)), { recursive: true });
   fs.writeFileSync(graphTaskAuthorityPath(teamName), JSON.stringify(new GraphTaskController().snapshot()));
-  writeConfigAtomic(configPath(teamName), config);
+  writeJsonFixture(configPath(teamName), config);
   const authority = new DurableGraphTaskAuthority();
   const publication = new DurableTaskMutationPublication();
   const orchestration = new DurableGraphTaskOrchestration(authority, publication, publication, publication);
