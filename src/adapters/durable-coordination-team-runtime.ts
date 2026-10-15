@@ -1,5 +1,5 @@
 import { legacyCarrierAttention } from "../carrier-observation";
-import { hostEnv } from "../env/host-env";
+import { readProcessGeneration } from "../env/async-process-generation";
 import { currentDeliveryDegradations, verifyRuntimeGeneration, readRuntimeStatus } from "../utils/runtime";
 import { readConfig, resolveCurrentLeadSessionBinding } from "../utils/teams";
 import type {
@@ -13,7 +13,7 @@ export class DurableCoordinationTeamRuntimeQuery implements CoordinationTeamRunt
   async readRuntime(teamName: string, member: CoordinationMemberEvidence): Promise<CoordinationRuntimeEvidence | null> {
     const status = await readRuntimeStatus(teamName, member.name);
     if (!status) return null;
-    const probe = status.pid ? hostEnv().process.generation(status.pid) : { kind: "unknown" as const, reason: "runtime_missing" };
+    const probe = status.pid ? await readProcessGeneration(status.pid) : { kind: "unknown" as const, reason: "runtime_missing" };
     const attention = legacyCarrierAttention(member, status, probe);
     const deliveryDegraded = currentDeliveryDegradations(member, status, verifyRuntimeGeneration(status, probe));
     return {

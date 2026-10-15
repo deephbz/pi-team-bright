@@ -47,6 +47,7 @@ vi.mock("../utils/teams", () => ({
 }));
 
 import { TeamSessionLifecycleService } from "./team-session-lifecycle-service";
+import { nodeHostEnv, runWithHostEnv, type GenerationProbe } from "../env/host-env";
 import type { TeamLifecyclePublication } from "./team-lifecycle-publication";
 
 function member(name: string, sessionFile?: string) {
@@ -104,6 +105,27 @@ describe("Team Session lifecycle boundary", () => {
     fixture.onConfig = () => { fixture.runtimeStatus.lastStop.stopId = "after"; };
     expect(await new TeamSessionLifecycleService(publication()).admitWorker(workerInput)).toMatchObject({ kind: "refused", exitProcess: false });
     expect(fixture.writeRuntime).not.toHaveBeenCalled(); expect(fixture.publish).not.toHaveBeenCalled();
+  });
+
+  it.each(["worker", "team-lead"])("refuses %s admission when shutdown enters during the async generation read", async name => {
+    reset(); fixture.current = member(name, workerInput.sessionFile);
+    fixture.runtimeStatus = { pid: process.pid, startedAt: 1, membershipId: `${name}-membership` };
+    let release!: (value: Map<number, GenerationProbe>) => void;
+    let started!: () => void;
+    const probing = new Promise<void>(resolve => { started = resolve; });
+    const generations = vi.fn(() => new Promise<Map<number, GenerationProbe>>(resolve => { release = resolve; started(); }));
+    await runWithHostEnv({ ...nodeHostEnv, process: { ...nodeHostEnv.process, generations } }, async () => {
+      const service = new TeamSessionLifecycleService(publication());
+      const admission = name === "worker" ? service.admitWorker(workerInput) : service.admitLead(workerInput);
+      await probing;
+      expect(generations).toHaveBeenCalledExactlyOnceWith([process.pid]);
+      await service.recordStop({ ...workerInput, workerName: name, membershipId: `${name}-membership`, piReason: "quit" });
+      release(new Map([[process.pid, { kind: "found", generation: { pid: process.pid, osBirthToken: "birth", bootId: "boot" } }]]));
+      expect(await admission).toMatchObject({ kind: "refused", reason: "A newer shutdown superseded this admission.", exitProcess: false });
+      expect(fixture.writeRuntime).toHaveBeenCalledOnce(); // Only the stop intent was written.
+      expect(fixture.events).not.toContain("runtime-claim");
+      expect(fixture.bind).not.toHaveBeenCalled(); expect(fixture.publish).not.toHaveBeenCalled();
+    });
   });
 
   it.each(["quit", "new", "resume", "fork"] as const)("records %s intent during verifier outage without a failed event", async piReason => {

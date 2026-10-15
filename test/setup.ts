@@ -11,7 +11,7 @@ vi.mock("../src/env/host-env", async importOriginal => {
   module.nodeHostEnv.process.generation = pid => pid === process.pid
     ? { kind: "found", generation: { pid, osBirthToken: "fixture-birth", bootId: "fixture-boot" } }
     : { kind: "unknown", reason: "unit_fixture_unconfigured_pid" };
-  module.nodeHostEnv.process.generations = async pids => new Map(pids.map(pid => [pid, module.nodeHostEnv.process.generation(pid)]));
+  module.nodeHostEnv.process.generations = async function (pids) { return new Map(pids.map(pid => [pid, this.generation(pid)])); };
   return module;
 });
 

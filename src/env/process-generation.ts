@@ -25,8 +25,26 @@ function parseReply(pid: number, line: string): GenerationProbe {
 /** A poll uses one bounded helper invocation for the whole Team. */
 export async function probeProcessGenerations(pids: readonly number[]): Promise<Map<number, GenerationProbe>> {
   const unique = [...new Set(pids)].filter(pid => Number.isSafeInteger(pid) && pid > 1);
-  if (process.platform !== "darwin") return new Map(unique.map(pid => [pid, probeProcessGeneration(pid)]));
   if (!unique.length) return new Map();
+  const platform = process.platform;
+  if (platform === "linux") {
+    let bootId: string;
+    try { bootId = (await fs.promises.readFile("/proc/sys/kernel/random/boot_id", "utf8")).trim(); }
+    catch { return new Map(unique.map(pid => [pid, { kind: "unknown", reason: "boot_identity_unavailable" }])); }
+    return new Map(await Promise.all(unique.map(async pid => {
+      let probe: GenerationProbe;
+      try {
+        const token = linuxStartToken(await fs.promises.readFile(`/proc/${pid}/stat`, "utf8"));
+        probe = bootId && token ? { kind: "found", generation: { pid, osBirthToken: token, bootId } }
+          : { kind: "unknown", reason: "malformed_proc_stat" };
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        probe = code === "ENOENT" || code === "ESRCH" ? { kind: "absent" } : { kind: "unknown", reason: code ?? "generation_read_failed" };
+      }
+      return [pid, probe] as const;
+    })));
+  }
+  if (platform !== "darwin") return new Map(unique.map(pid => [pid, { kind: "unknown", reason: "generation_verifier_unavailable" }]));
   const helper = path.resolve(__dirname, "../../native/bin/process-generation");
   return new Promise(resolve => {
     execFile(helper, unique.map(String), { encoding: "utf8", timeout: 2000 }, (error, stdout) => {

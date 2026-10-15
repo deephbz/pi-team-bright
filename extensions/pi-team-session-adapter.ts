@@ -711,7 +711,7 @@ function registerSessionHooks() {
   (pi.on as (event: string, handler: () => void) => void)("session_compact_failed", () => { compactionGate.end(); });
   pi.on("session_start", async (event, ctx) => {
   workerPromptAddition = undefined;
-  warnMissingGenerationHelper(ctx);
+  await warnMissingGenerationHelper(ctx);
   compactionGate.reset();
   doctorGeneration++;
   paths.ensureDirs();

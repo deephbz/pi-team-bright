@@ -75,8 +75,8 @@ export function verifyRuntimeGeneration(status: Pick<AgentRuntimeStatus, "pid" |
   return probe.generation.osBirthToken === status.osBirthToken && probe.generation.bootId === status.bootId ? "live" : "gone";
 }
 
-export function ownBirthIdentity(): { osBirthToken?: string; bootId?: string } {
-  const probe = hostEnv().process.generation(hostEnv().process.pid);
+export function ownBirthIdentity(observed?: import("../env/host-env").GenerationProbe): { osBirthToken?: string; bootId?: string } {
+  const probe = observed ?? hostEnv().process.generation(hostEnv().process.pid);
   return probe.kind === "found" ? { osBirthToken: probe.generation.osBirthToken, bootId: probe.generation.bootId } : {};
 }
 
@@ -153,6 +153,7 @@ export function admitRuntimeStartup(
   pid: number = hostEnv().process.pid,
   probe?: (pid: number) => "absent" | "occupied",
   launchId?: string,
+  observation?: import("../env/host-env").GenerationProbe,
 ): RuntimeStartupAdmission {
   if (!member.membershipId) return { kind: "refused", reason: `Current Membership for ${member.name} has no stable identity.` };
   if (!member.sessionFile) {
@@ -166,7 +167,7 @@ export function admitRuntimeStartup(
     if (generation.membershipId !== member.membershipId) {
       return { kind: "refused", reason: `Runtime evidence for prepared ${member.name} belongs to another Membership.` };
     }
-    const observed = probe ? undefined : hostEnv().process.generation(generation.pid);
+    const observed = probe ? undefined : observation ?? hostEnv().process.generation(generation.pid);
     if (observed?.kind === "unknown" && observed.reason === "generation_helper_missing") {
       return { kind: "refused", reason: MISSING_GENERATION_HELPER_MESSAGE, nextActionHint: "ask_human" };
     }
@@ -183,7 +184,7 @@ export function admitRuntimeStartup(
   if (!generation || generation.membershipId !== member.membershipId) {
     return { kind: "refused", reason: `Runtime evidence for already Session-bound ${member.name} is missing, malformed, or belongs to another Membership.` };
   }
-  const observed = probe ? undefined : hostEnv().process.generation(generation.pid);
+  const observed = probe ? undefined : observation ?? hostEnv().process.generation(generation.pid);
   const helperMissing = observed?.kind === "unknown" && observed.reason === "generation_helper_missing";
   // Exact bound re-entry does not replace a generation. A missing helper must
   // not eject the current process from its own Session during reload.

@@ -4,7 +4,7 @@ import { nodeHostEnv, runWithHostEnv } from "./env/host-env";
 
 const io = vi.hoisted(() => ({ member: {} as any, status: {} as any, events: [] as any[], now: 1000,
   failures: 0, probe: "live", presence: "present", activity: "idle", fence: false, readFailure: false,
-  leases: Promise.resolve() }));
+  leases: Promise.resolve(), publishingExit: false }));
 vi.mock("node:fs", () => ({ default: { readFileSync: () => JSON.stringify({ terminalBackend: "herdr", members: [io.member] }) } }));
 vi.mock("./utils/runtime", async original => ({ ...await original<any>(), readRuntimeStatus: async () => structuredClone(io.status) }));
 vi.mock("./utils/teams", () => ({ withCurrentMembershipLease: async (_: string, _id: string, action: any) => {
@@ -35,7 +35,7 @@ import { CarrierObserver, publishPredecessorExit, CARRIER_SAMPLE_TTL_MS } from "
 const host = () => ({ ...nodeHostEnv,
   clock: { ...nodeHostEnv.clock, now: () => io.now, setTimeout: (() => 0) as any, clearTimeout: () => {} },
   process: { ...nodeHostEnv.process, generation: () => ({ kind: "absent" as const }), generations: async (pids: readonly number[]) => new Map(pids.map(pid => [pid,
-    io.probe === "gone" ? { kind: "absent" as const } : io.probe === "unknown" ? { kind: "unknown" as const, reason: "source_unavailable" }
+    io.publishingExit || io.probe === "gone" ? { kind: "absent" as const } : io.probe === "unknown" ? { kind: "unknown" as const, reason: "source_unavailable" }
       : { kind: "found" as const, generation: { pid, osBirthToken: io.status.osBirthToken ?? "observed-birth", bootId: "boot" } }])) },
   exec: { ...nodeHostEnv.exec, run: async (_: string, args: readonly string[]) => ({ kind: "exited" as const, status: 0, stderr: "",
     stdout: JSON.stringify({ result: args[0] === "pane"
@@ -146,14 +146,17 @@ it("CarrierObserver publishes the accepted-journal reference across samples, fai
               "herdr", io.member.terminalTarget.kind, io.member.terminalTarget.targetId];
             const before = expected.findLast(e => e.field === "process" && JSON.stringify(e.identity) === JSON.stringify(identity))?.to ?? "unknown";
             const blocked = !io.status.osBirthToken || s.readFailure || (before !== "gone" && s.failures > 0);
-            if (blocked) {
-              await expect(publishPredecessorExit("team", io.member, io.status, "herdr")).rejects.toThrow();
+            io.publishingExit = true;
+            try {
+              if (blocked) {
+                await expect(publishPredecessorExit("team", io.member, io.status, "herdr")).rejects.toThrow();
+                expect(actual()).toEqual(expected);
+                continue;
+              }
+              await publishPredecessorExit("team", io.member, io.status, "herdr");
+              if (before !== "gone") expected.push({ identity, field: "process", from: before, to: "gone" });
               expect(actual()).toEqual(expected);
-              continue;
-            }
-            await publishPredecessorExit("team", io.member, io.status, "herdr");
-            if (before !== "gone") expected.push({ identity, field: "process", from: before, to: "gone" });
-            expect(actual()).toEqual(expected);
+            } finally { io.publishingExit = false; }
           }
           source(s);
           reference(expected, s);
