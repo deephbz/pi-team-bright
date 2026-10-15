@@ -15,7 +15,7 @@ import { HerdrAdapter } from "../adapters/herdr-adapter";
 import { Iterm2Adapter } from "../adapters/iterm2-adapter";
 import { memberTerminalTarget, terminalTarget } from "../utils/terminal-target";
 import { teamPanePlacement } from "../utils/team-pane-placement";
-import { currentTerminalForTeam } from "../utils/team-terminal";
+import { currentTerminalForTeamAsync } from "../utils/team-terminal";
 import type { SpawnOptions } from "../utils/terminal-adapter";
 import { withSemanticTrace } from "../utils/trace";
 import type { TeamLifecyclePublication, WorkerStartupObservation } from "./team-lifecycle-publication";
@@ -112,7 +112,8 @@ export class WorkerLaunchBridge {
   private async claim(request: WorkerLaunchRequest, observe: (member: Member) => void): Promise<LaunchClaim | WorkerLaunchResult> {
     const config = await teams.readConfig(request.teamName);
     if (config.separateWindows) {
-      const terminal = currentTerminalForTeam(config);
+      const terminal = await currentTerminalForTeamAsync(config);
+      assertLockDeadline();
       if (!terminal.supportsWindows()) throw new Error(`Separate windows mode is not supported in ${terminal.name}.`);
     }
     const member = [...config.members].reverse().find(m => m.name === request.workerName && m.agentType === "teammate" && m.isActive !== false);
@@ -160,7 +161,8 @@ export class WorkerLaunchBridge {
   private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number, observePane: (paneId: string) => void): Promise<WorkerLaunchResult> {
     const { member, config } = claim;
     const launchId = member.launch!.launchId;
-    const terminal = currentTerminalForTeam(config);
+    const terminal = await currentTerminalForTeamAsync(config);
+    assertLockDeadline();
     const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(member.cwd);
     const exactResume = claim.recoveryMode === "exact_session_resume";
     const argv = this.dependencies.buildWorkerArgv(exactResume ? undefined : member.model, exactResume ? undefined : member.modelProfile?.thinking ?? member.thinking, aggregate.path, aggregate.projectTrusted);

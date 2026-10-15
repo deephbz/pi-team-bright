@@ -123,6 +123,28 @@ afterEach(() => {
 });
 
 describe("registered Pi Session adapter characterization", () => {
+  it("does no Herdr I/O at registration and fences shutdown during async startup detection", async () => {
+    let finish!: (outcome: import("../env/host-env").ExecOutcome) => void;
+    const run = vi.fn(() => new Promise<import("../env/host-env").ExecOutcome>(resolve => { finish = resolve; }));
+    const runSync = vi.fn(() => { throw new Error("synchronous detection reached"); });
+    const env = { ...nodeHostEnv, process: { ...nodeHostEnv.process, env: { ...nodeHostEnv.process.env,
+      HERDR_ENV: "1", HERDR_PANE_ID: "synthetic-pane", HERDR_TAB_ID: "synthetic-tab", PI_TEAM_NAME: "", PI_AGENT_NAME: "" } },
+      exec: { run, runSync } };
+    await runWithHostEnv(env, async () => {
+      const harness = extension();
+      expect(run).not.toHaveBeenCalled(); expect(runSync).not.toHaveBeenCalled();
+      const ctx = context("/tmp/synthetic-unbound-session.jsonl");
+      const admission = vi.spyOn(TeamSessionLifecycleService.prototype, "admitLead");
+      const startup = harness.get("session_start")!({ reason: "resume" }, ctx);
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(run).toHaveBeenCalledOnce();
+      await harness.get("session_shutdown")!({ reason: "quit" }, ctx);
+      finish({ kind: "exited", status: 0, stdout: "running", stderr: "" });
+      await startup;
+      expect(admission).not.toHaveBeenCalled(); expect(runSync).not.toHaveBeenCalled();
+      expect(harness.sendMessage).not.toHaveBeenCalled();
+    });
+  });
   it("recovers only the Worker tool surface and suppresses leader branch hooks", async () => {
     vi.stubEnv("PI_AGENT_NAME", "");
     vi.stubEnv("PI_TEAM_NAME", "");

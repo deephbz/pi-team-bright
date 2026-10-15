@@ -112,6 +112,18 @@ export class HerdrAdapter implements TerminalAdapter {
     }
   }
 
+  async detectAsync(): Promise<boolean> {
+    if (hostEnv().process.env.HERDR_ENV !== "1" || !currentHerdrPane() || !currentHerdrTab()) return false;
+    try {
+      const result = await hostEnv().exec.run("herdr", ["status", "server"], { timeoutMs: 2000 });
+      return result.kind === "exited" && result.status === 0;
+    } catch { return false; }
+  }
+
+  async renamePaneAsync(paneId: string, label: string): Promise<void> {
+    await this.invokeAsync(["pane", "rename", paneId, label]);
+  }
+
   private invoke(args: string[]): Record<string, unknown> {
     return readHerdrReply(execCommand("herdr", args));
   }
@@ -338,7 +350,7 @@ export class HerdrAdapter implements TerminalAdapter {
     return paneId;
   }
 
-  private async invokeAsync(args: string[], deadline: number): Promise<Record<string, unknown>> {
+  private async invokeAsync(args: string[], deadline = hostEnv().clock.now() + 2000): Promise<Record<string, unknown>> {
     const timeoutMs = Math.min(2000, deadline - hostEnv().clock.now());
     if (timeoutMs <= 0) throw new Error("herdr_preparation_budget_expired");
     const result = await hostEnv().exec.run("herdr", args, { timeoutMs });
@@ -401,24 +413,64 @@ export class HerdrAdapter implements TerminalAdapter {
     } catch { return { state: "unknown", fact: "malformed_start_reply" }; }
   }
 
+  /** Keep each destructive query ordered; timeout never establishes absence. */
+  async killAsync(paneId: string): Promise<void> {
+    if (!paneId) return;
+    try {
+      const target = await this.invokeAsync(["pane", "get", paneId]);
+      const workspaceId = this.closeWorkspace(paneId, target);
+      const listed = await this.invokeAsync(["pane", "list", "--workspace", workspaceId]);
+      this.assertNotFinalPane(paneId, workspaceId, listed);
+      await this.invokeAsync(["pane", "close", paneId]);
+    } catch (error) { if (!isPaneNotFound(error)) throw error; }
+  }
+
+  async isAliveAsync(paneId: string): Promise<boolean> {
+    if (!paneId) return false;
+    try {
+      this.assertExactPane(paneId, await this.invokeAsync(["pane", "get", paneId]));
+      return this.hasShell(paneId, await this.invokeAsync(["pane", "process-info", "--pane", paneId]));
+    } catch (error) { if (isPaneNotFound(error)) return false; throw error; }
+  }
+
+  private assertExactPane(paneId: string, result: Record<string, unknown>): Record<string, unknown> {
+    const pane = result.pane;
+    if (!pane || typeof pane !== "object" || Array.isArray(pane)
+      || (pane as Record<string, unknown>).pane_id !== paneId) {
+      throw new Error("Herdr pane get response did not include the requested pane.");
+    }
+    return pane as Record<string, unknown>;
+  }
+
+  private closeWorkspace(paneId: string, result: Record<string, unknown>): string {
+    const workspaceId = this.assertExactPane(paneId, result).workspace_id;
+    if (typeof workspaceId !== "string" || !workspaceId) throw new Error("Herdr pane get response did not include workspace_id.");
+    return workspaceId;
+  }
+
+  private assertNotFinalPane(paneId: string, workspaceId: string, result: Record<string, unknown>): void {
+    const listed = result.panes;
+    if (!Array.isArray(listed) || !listed.every(pane => pane && typeof pane === "object" && !Array.isArray(pane))) {
+      throw new Error("Herdr pane list response did not include panes.");
+    }
+    if (listed.length <= 1) throw new Error(`Refusing to close Herdr pane ${paneId}: it is the last pane in workspace ${workspaceId}, and close would delete the workspace.`);
+  }
+
+  private hasShell(paneId: string, result: Record<string, unknown>): boolean {
+    const info = result.process_info;
+    if (!info || typeof info !== "object" || Array.isArray(info)
+      || (info as Record<string, unknown>).pane_id !== paneId) throw new Error("Herdr pane process-info response did not include the requested pane.");
+    const shellPid = (info as Record<string, unknown>).shell_pid;
+    if (shellPid === null) return false;
+    if (typeof shellPid !== "number" || !Number.isInteger(shellPid) || shellPid <= 0) throw new Error("Herdr pane process-info response did not include a usable shell_pid.");
+    return true;
+  }
+
   kill(paneId: string): void {
     if (!paneId) return;
     try {
-      const target = this.invoke(["pane", "get", paneId]).pane;
-      if (!target || typeof target !== "object" || Array.isArray(target)) {
-        throw new Error("Herdr pane get response did not include the requested pane.");
-      }
-      const workspaceId = (target as Record<string, unknown>).workspace_id;
-      if (typeof workspaceId !== "string" || !workspaceId) {
-        throw new Error("Herdr pane get response did not include workspace_id.");
-      }
-      const listed = this.invoke(["pane", "list", "--workspace", workspaceId]).panes;
-      if (!Array.isArray(listed) || !listed.every(pane => pane && typeof pane === "object" && !Array.isArray(pane))) {
-        throw new Error("Herdr pane list response did not include panes.");
-      }
-      if (listed.length <= 1) {
-        throw new Error(`Refusing to close Herdr pane ${paneId}: it is the last pane in workspace ${workspaceId}, and close would delete the workspace.`);
-      }
+      const workspaceId = this.closeWorkspace(paneId, this.invoke(["pane", "get", paneId]));
+      this.assertNotFinalPane(paneId, workspaceId, this.invoke(["pane", "list", "--workspace", workspaceId]));
       this.invoke(["pane", "close", paneId]);
     } catch (error) {
       if (!isPaneNotFound(error)) throw error;
@@ -428,20 +480,8 @@ export class HerdrAdapter implements TerminalAdapter {
   isAlive(paneId: string): boolean {
     if (!paneId) return false;
     try {
-      const result = this.invoke(["pane", "get", paneId]);
-      const pane = result.pane;
-      if (!pane || typeof pane !== "object" || Array.isArray(pane)
-        || (pane as Record<string, unknown>).pane_id !== paneId) {
-        throw new Error("Herdr pane get response did not include the requested pane.");
-      }
-      const processResult = this.invoke(["pane", "process-info", "--pane", paneId]);
-      const processInfo = processResult.process_info;
-      if (!processInfo || typeof processInfo !== "object" || Array.isArray(processInfo)
-        || (processInfo as Record<string, unknown>).pane_id !== paneId) {
-        throw new Error("Herdr pane process-info response did not include the requested pane.");
-      }
-      const shellPid = (processInfo as Record<string, unknown>).shell_pid;
-      return typeof shellPid === "number" && Number.isInteger(shellPid) && shellPid > 0;
+      this.assertExactPane(paneId, this.invoke(["pane", "get", paneId]));
+      return this.hasShell(paneId, this.invoke(["pane", "process-info", "--pane", paneId]));
     } catch (error) {
       if (isPaneNotFound(error)) return false;
       throw error;

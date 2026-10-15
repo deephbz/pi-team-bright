@@ -12,6 +12,9 @@ const fixture = vi.hoisted(() => ({
   deactivateFailure: undefined as Error | undefined,
   deactivateNull: false,
   kill: vi.fn(),
+  asyncPane: false,
+  killAsync: vi.fn(),
+  isAliveAsync: vi.fn(),
   killWindow: vi.fn(),
   paneAlive: false,
   windowAlive: false,
@@ -58,8 +61,9 @@ vi.mock("../utils/terminal-target", () => ({
 }));
 vi.mock("../utils/team-terminal", async importOriginal => ({
   ...await importOriginal<any>(),
-  terminalForTeam: () => ({
+  terminalForTeamAsync: async () => ({
     name: "fake-terminal",
+    ...(fixture.asyncPane ? { killAsync: fixture.killAsync, isAliveAsync: fixture.isAliveAsync } : {}),
     kill: (...args: unknown[]) => fixture.kill(...args),
     killWindow: (...args: unknown[]) => fixture.killWindow(...args),
     isAlive: () => fixture.paneAlive,
@@ -116,6 +120,8 @@ function reset() {
   fixture.deactivateFailure = undefined;
   fixture.deactivateNull = false;
   fixture.kill.mockReset();
+  fixture.asyncPane = false;
+  fixture.killAsync.mockReset(); fixture.isAliveAsync.mockReset();
   fixture.killWindow.mockReset();
   fixture.paneAlive = false;
   fixture.windowAlive = false;
@@ -125,6 +131,23 @@ function reset() {
 }
 
 describe("Team lifecycle service boundary", () => {
+  it.each([false, true])("awaits async stop evidence before deactivation (unavailable=%s)", async unavailable => {
+    reset(); fixture.config.members = [member("worker")]; fixture.asyncPane = true;
+    let finish!: () => void;
+    let fail!: (error: Error) => void;
+    let entered!: () => void;
+    const stopping = new Promise<void>(resolve => { entered = resolve; });
+    fixture.killAsync.mockImplementation(() => new Promise<void>((resolve, reject) => { finish = resolve; fail = reject; entered(); }));
+    fixture.isAliveAsync.mockResolvedValue(false);
+    const service = new TeamLifecycleService({ assignedWorkGuard: guard(), lifecyclePublication: publication() });
+    const result = service.stopWorker("team", "worker"); await stopping;
+    expect(fixture.deactivate).toEqual([]); expect(fixture.isAliveAsync).not.toHaveBeenCalled();
+    if (unavailable) fail(new Error("herdr_close_timeout")); else finish();
+    expect(await result).toMatchObject(unavailable ? { kind: "refused", reason: "stop_not_confirmed" } : { kind: "stopped" });
+    expect(fixture.deactivate).toEqual(unavailable ? [] : ["worker"]);
+    expect(fixture.kill).not.toHaveBeenCalled();
+    expect(fixture.isAliveAsync).toHaveBeenCalledTimes(unavailable ? 0 : 1);
+  });
   it.each(["new", "resume", "fork"])("deactivates a %s-switched Membership without closing its pane", async piReason => {
     reset(); fixture.config.members = [member("worker")]; fixture.paneAlive = true;
     fixture.runtime = { membershipId: "worker-membership", lastStop: { piReason } };

@@ -4,7 +4,7 @@ import * as paths from "../utils/paths";
 import * as runtime from "../utils/runtime";
 import * as teams from "../utils/teams";
 import { assertTeamTerminalTarget, memberTerminalTarget } from "../utils/terminal-target";
-import { assertTargetSupportedByTerminal, terminalForTeam } from "../utils/team-terminal";
+import { assertTargetSupportedByTerminal, terminalForTeamAsync } from "../utils/team-terminal";
 import type { Member } from "./contracts";
 import type { AssignedWorkGuard } from "./assigned-work-guard";
 import type { TeamLifecyclePublication } from "./team-lifecycle-publication";
@@ -129,7 +129,7 @@ export class TeamLifecycleService {
       return;
     }
     const teamConfig = await teams.readConfig(teamName);
-    const teamTerminal = terminalForTeam(teamConfig);
+    const teamTerminal = await terminalForTeamAsync(teamConfig);
     const target = teamConfig.terminalBackend ? assertTeamTerminalTarget(teamConfig, member) : memberTerminalTarget(member, teamTerminal.name);
     if (!target) throw new Error(`Cannot stop ${member.name}: this Membership has no terminal binding and no exact Membership-bound runtime record proves the process exited. The Membership remains current.`);
     assertTargetSupportedByTerminal(teamTerminal, target);
@@ -137,8 +137,10 @@ export class TeamLifecycleService {
       teamTerminal.killWindow(target.targetId);
       if (teamTerminal.isWindowAlive(target.targetId)) throw new Error(`Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop window ${target.targetId}. The Membership remains current; close the process manually and retry.`);
     } else {
-      teamTerminal.kill(target.targetId);
-      if (teamTerminal.isAlive(target.targetId)) throw new Error(`Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop pane ${target.targetId}. The Membership remains current; close the process manually and retry.`);
+      if (teamTerminal.killAsync) await teamTerminal.killAsync(target.targetId);
+      else teamTerminal.kill(target.targetId);
+      const alive = teamTerminal.isAliveAsync ? await teamTerminal.isAliveAsync(target.targetId) : teamTerminal.isAlive(target.targetId);
+      if (alive) throw new Error(`Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop pane ${target.targetId}. The Membership remains current; close the process manually and retry.`);
     }
     if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
   }

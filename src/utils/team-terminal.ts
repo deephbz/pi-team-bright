@@ -1,5 +1,5 @@
 import { hostEnv } from "../env/host-env";
-import { getAdapterByName, getTerminalAdapter } from "../adapters/terminal-registry";
+import { getAdapterByName, getTerminalAdapter, getTerminalAdapterAsync } from "../adapters/terminal-registry";
 import type { TeamConfig, TerminalTarget } from "../team-authority/contracts";
 import type { TerminalAdapter } from "./terminal-adapter";
 import { hasPersistedTerminalTarget } from "./terminal-target";
@@ -9,12 +9,26 @@ import { hasPersistedTerminalTarget } from "./terminal-target";
  * compatibility fallback only for Team records created before terminalBackend
  * existed; persisted Teams never switch because the current environment did.
  */
-export function terminalForTeam(config: TeamConfig): TerminalAdapter {
+export async function terminalForTeamAsync(config: TeamConfig): Promise<TerminalAdapter> {
+  if (config.terminalBackend || config.members.some(hasPersistedTerminalTarget)) return terminalForTeam(config);
+  const detected = await getTerminalAdapterAsync();
+  return terminalForTeam(config, () => detected);
+}
+
+export async function currentTerminalForTeamAsync(config: TeamConfig): Promise<TerminalAdapter> {
+  if (config.terminalBackend === "herdr") return currentTerminalForTeam(config);
+  // Resolve persisted authority before ambient detection, including corrupt legacy records.
+  if (config.terminalBackend || config.members.some(hasPersistedTerminalTarget)) terminalForTeam(config);
+  const detected = await getTerminalAdapterAsync();
+  return currentTerminalForTeam(config, () => detected);
+}
+
+export function terminalForTeam(config: TeamConfig, detect = getTerminalAdapter): TerminalAdapter {
   if (!config.terminalBackend) {
     if (config.members.some(hasPersistedTerminalTarget)) {
       throw new Error(`Team ${config.name} has terminal targets but predates terminalBackend; refusing ambient backend dispatch. Stop the Team and migrate or recreate it with the current PiTeams version.`);
     }
-    const legacy = getTerminalAdapter();
+    const legacy = detect();
     if (!legacy) {
       throw new Error(`Team ${config.name} predates terminalBackend and no terminal adapter is available; stop and recreate the Team with the current PiTeams version.`);
     }
@@ -33,8 +47,8 @@ export function terminalForTeam(config: TeamConfig): TerminalAdapter {
 }
 
 /** Spawning/resume needs the process to be inside the Team's selected backend. */
-export function currentTerminalForTeam(config: TeamConfig): TerminalAdapter {
-  const terminal = terminalForTeam(config);
+export function currentTerminalForTeam(config: TeamConfig, detect = getTerminalAdapter): TerminalAdapter {
+  const terminal = terminalForTeam(config, detect);
   if (!config.terminalBackend) return terminal;
   if (config.terminalBackend === "herdr") {
     const env = hostEnv().process.env;
@@ -42,7 +56,7 @@ export function currentTerminalForTeam(config: TeamConfig): TerminalAdapter {
     // Bounded async placement proves the target. No synchronous server detection precedes it.
     return terminal;
   }
-  const current = getTerminalAdapter();
+  const current = detect();
   if (!current || current.name !== config.terminalBackend) {
     throw new Error(`Team ${config.name} is bound to ${config.terminalBackend}, but this Pi process is running in ${current?.name || "no detected terminal backend"}; refusing to mix terminal backends in one Team epoch.`);
   }

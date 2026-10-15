@@ -29,7 +29,8 @@ import type { GraphTaskOrchestrationPort } from "../src/task-authority/graph-orc
 import { diagnoseTeam, formatTeamStatus, formatCarrierStatus, isLegacyAdoptionCandidate, getPiTeamsArgumentCompletions, knownTeamNames, parsePiTeamsCommand, PI_TEAMS_COMMAND_USAGE, type TeamSessionBindingStatus } from "../src/utils/team-status";
 import { collectPtbDoctorContext, PTB_DOCTOR_CUSTOM_TYPE } from "../src/utils/ptb-doctor-command";
 import { getPtbArgumentCompletions, parsePtbCommand, PTB_COMMAND_USAGE, type PtbAction, type PtbSettingsScope } from "../src/utils/ptb-command";
-import { getTerminalAdapter } from "../src/adapters/terminal-registry";
+import { getTerminalAdapterAsync } from "../src/adapters/terminal-registry";
+import type { TerminalAdapter } from "../src/utils/terminal-adapter";
 import { TaskGraphPaneService, type TaskGraphControlReadSource } from "../src/task-graph-view/integration";
 import { withSemanticTrace } from "../src/utils/trace";
 import { createSettingsWarningPresenter } from "./settings-warning";
@@ -65,7 +66,7 @@ export function createPiTeamSessionAdapter(options: {
   taskGraphControlSource: TaskGraphControlReadSource;
 }): PiTeamSessionAdapter {
   const { pi, teamSessionLifecycleService, teamLifecycleService, getModelToolJourney, modelToolBranchIds, projectTrust, lifecyclePublication, alertMembership, taskDeliveryMembership, graphTaskAuthority, teamQuery, leaderToolNames, workerToolNames, refreshAlertToolProjection, registerRecoveredWorkerTools, taskReadyReconciliation, taskGraphControlSource } = options;
-  const terminal = getTerminalAdapter();
+  let terminal: TerminalAdapter | null = null;
   const taskGraphPane = new TaskGraphPaneService({ graphControlSource: taskGraphControlSource });
   let isTeammate = !!hostEnv().process.env.PI_AGENT_NAME && hostEnv().process.env.PI_AGENT_NAME !== "team-lead";
   const envAgentName = hostEnv().process.env.PI_AGENT_NAME;
@@ -711,9 +712,11 @@ function registerSessionHooks() {
   (pi.on as (event: string, handler: () => void) => void)("session_compact_failed", () => { compactionGate.end(); });
   pi.on("session_start", async (event, ctx) => {
   workerPromptAddition = undefined;
-  await warnMissingGenerationHelper(ctx);
+  const startupGeneration = ++doctorGeneration;
+  const [detected] = await Promise.all([getTerminalAdapterAsync(), warnMissingGenerationHelper(ctx)]);
+  if (startupGeneration !== doctorGeneration) return;
+  terminal = detected;
   compactionGate.reset();
-  doctorGeneration++;
   paths.ensureDirs();
   stopDeliveries();
   leaderRunSettled = false;
@@ -850,6 +853,7 @@ function registerSessionHooks() {
 });
 
 pi.on("session_shutdown", async (event, ctx) => {
+  doctorGeneration++; // Invalidate pending detection before any shutdown await.
   const sessionFile = ctx.sessionManager.getSessionFile();
   if (teamName && currentMembershipId && sessionFile) {
     await teamSessionLifecycleService.recordStop({ teamName, workerName: agentName, sessionFile,
@@ -858,7 +862,6 @@ pi.on("session_shutdown", async (event, ctx) => {
   }
   compactionGate.reset();
   settingsWarnings.clear(ctx);
-  doctorGeneration++;
   if (isTeammate && event.reason === "reload") {
     // Pi captures active tools after this hook and replaces this extension
     // closure. Restore the immutable baseline before that capture.
