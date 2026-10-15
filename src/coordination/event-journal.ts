@@ -1,5 +1,6 @@
 import { hostEnv, type TimerHandle } from "../env/host-env";
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import fsp from "node:fs/promises";
 import path from "node:path";
 import { withLock } from "../utils/lock";
@@ -277,6 +278,7 @@ interface JournalReadCache {
   modifiedAt: number;
   changedAt: number;
   endsWithNewline: boolean;
+  prefixDigest: string;
   events: TeamEvent[];
   lastCursor: bigint;
 }
@@ -345,28 +347,34 @@ function readJournal(teamName: string): TeamEvent[] {
       if (stat.size === cached.byteOffset && stat.mtimeMs === cached.modifiedAt && stat.ctimeMs === cached.changedAt) return cached.events;
       if (stat.size > cached.byteOffset && cached.endsWithNewline) {
         try {
-          const appended = readRange(fd, cached.byteOffset, stat.size - cached.byteOffset);
-          const events = parseJournalLines(appended.toString("utf8"), cached.events, cached.lastCursor);
-          const tail = appended.at(-1) ?? 0;
-          const result: JournalReadCache = {
-            device: stat.dev,
-            inode: stat.ino,
-            byteOffset: stat.size,
-            modifiedAt: stat.mtimeMs,
-            changedAt: stat.ctimeMs,
-            endsWithNewline: tail === 10,
-            events,
-            lastCursor: events.length ? parseCursor(events.at(-1)!.cursor) : 0n,
-          };
-          cacheJournalRead(journal, result);
-          return events;
+          // Growth can include an in-place rewrite. Verify all cached bytes
+          // before reusing parsed events; only new bytes need JSON validation.
+          const digest = createHash("sha256").update(readRange(fd, 0, cached.byteOffset));
+          if (digest.copy().digest("hex") === cached.prefixDigest) {
+            const appended = readRange(fd, cached.byteOffset, stat.size - cached.byteOffset);
+            const events = parseJournalLines(appended.toString("utf8"), cached.events, cached.lastCursor);
+            const tail = appended.at(-1) ?? 0;
+            const result: JournalReadCache = {
+              device: stat.dev,
+              inode: stat.ino,
+              byteOffset: stat.size,
+              modifiedAt: stat.mtimeMs,
+              changedAt: stat.ctimeMs,
+              endsWithNewline: tail === 10,
+              prefixDigest: digest.update(appended).digest("hex"),
+              events,
+              lastCursor: events.length ? parseCursor(events.at(-1)!.cursor) : 0n,
+            };
+            cacheJournalRead(journal, result);
+            return events;
+          }
         } catch (error) {
           journalReadCache.delete(journal);
           throw error;
         }
       }
-      // Same-size rewrites and appends after a valid unterminated event are
-      // ambiguous. Revalidate the complete image rather than extending cache.
+      // Changed prefixes, same-size rewrites and appends after a valid
+      // unterminated event require validation of the complete image.
     }
 
     try {
@@ -379,6 +387,7 @@ function readJournal(teamName: string): TeamEvent[] {
         modifiedAt: stat.mtimeMs,
         changedAt: stat.ctimeMs,
         endsWithNewline: stat.size === 0 || raw.at(-1) === 10,
+        prefixDigest: createHash("sha256").update(raw).digest("hex"),
         events,
         lastCursor: events.length ? parseCursor(events.at(-1)!.cursor) : 0n,
       });
@@ -392,42 +401,58 @@ function readJournal(teamName: string): TeamEvent[] {
   }
 }
 
+async function readLastJournalLine(handle: fsp.FileHandle, end: number): Promise<{ bytes: Buffer; start: number; end: number } | undefined> {
+  const chunks: Buffer[] = [];
+  let lineEnd: number | undefined;
+  while (end > 0) {
+    const start = Math.max(0, end - 4096);
+    const chunk = Buffer.alloc(end - start);
+    let offset = 0;
+    while (offset < chunk.length) {
+      const { bytesRead } = await handle.read(chunk, offset, chunk.length - offset, start + offset);
+      if (bytesRead === 0) throw new Error("Team event journal changed while it was being read.");
+      offset += bytesRead;
+    }
+    let until = chunk.length;
+    if (lineEnd === undefined) {
+      // The full reader skips empty lines, but does not skip whitespace lines.
+      while (until > 0 && chunk[until - 1] === 10) until--;
+      if (until > 0) lineEnd = start + until;
+    }
+    if (lineEnd !== undefined) {
+      const separator = chunk.lastIndexOf(10, until - 1);
+      chunks.push(chunk.subarray(separator + 1, until));
+      if (separator >= 0) return { bytes: Buffer.concat(chunks.reverse()), start: start + separator + 1, end: lineEnd };
+    }
+    end = start;
+  }
+  return lineEnd === undefined ? undefined : { bytes: Buffer.concat(chunks.reverse()), start: 0, end: lineEnd };
+}
+
 async function readJournalTailCursor(teamName: string): Promise<bigint> {
   const journal = teamEventJournalPath(teamName);
   if (!fs.existsSync(journal)) return 0n;
   const handle = await fsp.open(journal, "r+");
   try {
     const size = (await handle.stat()).size;
-    if (size === 0) return 0n;
-    const chunkSize = 4096;
-    let end = size;
-    let bytes = Buffer.alloc(0);
-    let newlineCount = 0;
-    while (end > 0 && newlineCount < 2) {
-      const start = Math.max(0, end - chunkSize);
-      const chunk = Buffer.alloc(end - start);
-      await handle.read(chunk, 0, chunk.length, start);
-      bytes = Buffer.concat([chunk, bytes]);
-      newlineCount = [...bytes].filter((byte) => byte === 10).length;
-      end = start;
-    }
-    const complete = bytes.at(-1) === 10;
-    const lines = bytes.toString("utf8").split("\n");
-    const finalLine = complete ? lines.at(-2) ?? "" : lines.at(-1) ?? "";
-    if (!finalLine) return 0n;
+    const line = await readLastJournalLine(handle, size);
+    if (!line) return 0n;
+    let event: TeamEvent;
     try {
-      const event = parseEvent(finalLine, 0);
-      if (!complete) await handle.write(Buffer.from("\n"), 0, 1, size);
-      return parseCursor(event.cursor);
+      event = parseEvent(line.bytes.toString("utf8"), 0);
     } catch (error) {
-      if (complete) throw error;
-      // A malformed unterminated suffix is a torn write. Drop only that suffix.
-      const priorLine = lines.at(-2) ?? "";
-      const truncateAt = size - Buffer.byteLength(finalLine);
-      await handle.truncate(Math.max(0, truncateAt));
-      if (!priorLine) return 0n;
-      return parseCursor(parseEvent(priorLine, 0).cursor);
+      if (line.end !== size) throw error;
+      // Validate the preceding event before dropping only the raw torn suffix.
+      const prior = await readLastJournalLine(handle, line.start);
+      const cursor = prior ? parseCursor(parseEvent(prior.bytes.toString("utf8"), 0).cursor) : 0n;
+      await handle.truncate(line.start);
+      return cursor;
     }
+    if (line.end === size) {
+      const { bytesWritten } = await handle.write(Buffer.from("\n"), 0, 1, size);
+      if (bytesWritten !== 1) throw new Error("Team event journal newline write made no progress.");
+    }
+    return parseCursor(event.cursor);
   } finally {
     await handle.close();
   }
