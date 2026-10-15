@@ -87,6 +87,7 @@ function actor(pid = 7101) {
     return handle;
   };
   const env: HostEnv = {
+    durableFs: nodeHostEnv.durableFs,
     clock: {
       now: () => now,
       setTimeout: (fn, ms) => schedule(fn, ms),
