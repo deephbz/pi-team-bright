@@ -8,7 +8,7 @@ import timerPromises from "node:timers/promises";
 import childProcess from "node:child_process";
 import { syncBuiltinESMExports } from "node:module";
 
-interface Scope { root: string; canonicalRoot: string; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Map<number, string>; afterFsync: (file: string) => void }
+interface Scope { root: string; canonicalRoot: string; actor?: string; violations: string[]; failures: Error[]; changed: (file: string) => void; fds: Map<number, string>; afterFsync: (file: string) => void; scheduleFs: (actor: string, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> }
 const active = new AsyncLocalStorage<Scope>();
 const real = { exists: fs.existsSync, realpath: fs.realpathSync, lstat: fs.lstatSync };
 let users = 0;
@@ -93,8 +93,46 @@ function install(): void {
     });
     reject(fs, name.slice(0, -4), "Async filesystem completion is not scheduled");
   }
-  for (const name of Object.keys(fsp)) reject(fsp, name, "Async filesystem completion is not scheduled");
+  const scheduled = new Set(["mkdir", "stat", "open", "writeFile", "rename", "unlink", "chmod", "appendFile"]);
+  for (const name of scheduled) patch(fsp, name, original => function(this: unknown, ...args: any[]) {
+    const scope = active.getStore();
+    if (!scope) return original.apply(this, args);
+    const actor = scope.actor;
+    if (!actor) return fail(scope, `Async filesystem operation has no actor: ${name}`);
+    return scope.scheduleFs(actor, `fs.promises.${name}`, () => {
+      if (typeof args[0] !== "number") checkPath(scope, args[0]);
+      const result = (fs as any)[`${name}Sync`](...args);
+      if (name === "open") return scheduledFileHandle(scope, result);
+      return result;
+    }, () => Object.assign(new Error("Scheduled filesystem operation cancelled with its actor"), { code: "ECANCELED" }));
+  });
+  for (const name of Object.keys(fsp)) if (!scheduled.has(name)) reject(fsp, name, "Async filesystem completion is not scheduled");
   syncBuiltinESMExports();
+}
+
+function scheduledFileHandle(scope: Scope, fd: number): object {
+  const run = (name: string, action: () => unknown) => {
+    const actor = scope.actor;
+    if (!actor) return Promise.reject(new Error(`Async filesystem handle has no actor: ${name}`));
+    return scope.scheduleFs(actor, `fs.FileHandle.${name}`, () => active.run(scope, action), () => Object.assign(new Error("Scheduled file handle operation cancelled with its actor"), { code: "ECANCELED" }));
+  };
+  return {
+    writeFile: (data: any, options?: any) => run("writeFile", () => fs.writeFileSync(fd, data, options)),
+    write: (...args: any[]) => run("write", () => {
+      const result = (fs.writeSync as any)(fd, ...args);
+      return typeof args[0] === "string" ? result : { bytesWritten: result, buffer: args[0] };
+    }),
+    read: (...args: any[]) => run("read", () => {
+      const result = (fs.readSync as any)(fd, ...args);
+      return { bytesRead: result, buffer: args[0] };
+    }),
+    sync: () => run("sync", () => fs.fsyncSync(fd)),
+    datasync: () => run("datasync", () => fs.fdatasyncSync(fd)),
+    stat: () => run("stat", () => fs.fstatSync(fd)),
+    truncate: (length?: number) => run("truncate", () => fs.ftruncateSync(fd, length)),
+    chmod: (mode: number) => run("chmod", () => fs.fchmodSync(fd, mode)),
+    close: () => run("close", () => { try { fs.closeSync(fd); } finally { scope.fds.delete(fd); } }),
+  };
 }
 
 /** Guards runtime actor work. Module loading and world setup happen before entering this boundary. */
@@ -103,13 +141,13 @@ export class HostGuard {
   private readonly failures: Error[] = [];
   private readonly scope: Scope;
   private disposed = false;
-  constructor(root: string, changed: (file: string) => void, afterFsync: (file: string) => void = () => {}) {
-    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Map(), afterFsync };
+  constructor(root: string, changed: (file: string) => void, afterFsync: (file: string) => void = () => {}, scheduleFs: (actor: string, label: string, action: () => unknown, onCancel?: () => unknown) => Promise<unknown> = (_actor, label) => Promise.reject(new Error(`Async filesystem completion has no scheduler: ${label}`))) {
+    this.scope = { root: path.resolve(root), canonicalRoot: real.realpath(root), violations: this.violations, failures: this.failures, changed, fds: new Map(), afterFsync, scheduleFs };
     if (users++ === 0) install();
   }
-  run<T>(action: () => T): T {
+  run<T>(action: () => T, actor?: string): T {
     if (this.disposed) throw new Error("World is disposed");
-    return active.run(this.scope, action);
+    return active.run({ ...this.scope, actor }, action);
   }
   assertClean(): void { if (this.violations.length) throw new Error(`Host escape: ${this.violations.join("; ")}`, { cause: this.failures[0] }); }
   dispose(): void {

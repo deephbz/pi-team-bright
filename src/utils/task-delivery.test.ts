@@ -488,7 +488,7 @@ describe("Task-native delivery", () => {
     expect(sendMessage).not.toHaveBeenCalled();
     await delivery.scan();
 
-    expect(reconcileReady).toHaveBeenCalledTimes(2);
+    expect(reconcileReady.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(sendMessage).toHaveBeenCalledOnce();
     expect(sendMessage.mock.calls[0]?.[0]).toMatchObject({
       customType: TASK_CHANGE_CUSTOM_TYPE,

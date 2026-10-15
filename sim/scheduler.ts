@@ -1,7 +1,7 @@
 import type { HostClock, TimerHandle } from "../src/env/host-env";
 import { Entropy } from "./entropy";
 
-type Operation = { id: number; label: string; actor?: string; due: number; run: () => unknown; interval?: number };
+type Operation = { id: number; label: string; actor?: string; due: number; run: () => unknown; interval?: number; onCancel?: () => void };
 export interface Decision { at: number; enabled: string[]; selected: string }
 
 /** The sole scheduler. Promise jobs drain between choices; no host I/O may run underneath it. */
@@ -16,15 +16,20 @@ export class Scheduler {
 
   constructor(readonly entropy: Entropy) {}
 
-  enqueue(label: string, run: () => unknown, options: { actor?: string; delay?: number; interval?: number } = {}): number {
+  enqueue(label: string, run: () => unknown, options: { actor?: string; delay?: number; interval?: number; onCancel?: () => void } = {}): number {
     const delay = options.delay ?? 0;
     if (!Number.isFinite(delay) || delay < 0) throw new Error("Invalid operation delay");
     const id = ++this.nextId;
-    this.queue.set(id, { id, label, run, actor: options.actor, due: this.now + delay, interval: options.interval });
+    this.queue.set(id, { id, label, run, actor: options.actor, due: this.now + delay, interval: options.interval, onCancel: options.onCancel });
     return id;
   }
 
-  cancel(id: number): void { this.queue.delete(id); }
+  cancel(id: number): void {
+    const operation = this.queue.get(id);
+    if (!operation) return;
+    this.queue.delete(id);
+    operation.onCancel?.();
+  }
   cancelActor(actor: string): void {
     for (const operation of this.queue.values()) if (operation.actor === actor) this.cancel(operation.id);
     for (const [promise, owner] of this.pending) if (owner === actor) this.pending.delete(promise);

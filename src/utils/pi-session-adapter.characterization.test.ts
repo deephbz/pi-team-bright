@@ -275,13 +275,15 @@ describe("registered Pi Session adapter characterization", () => {
     const notices = () => ctx.ui.notify.mock.calls.filter(([text]: [string]) => /^Task delivery (is degraded|recovered)/.test(text));
     expect(start).toHaveBeenCalledTimes(3);
     expect(notices()).toEqual([["Task delivery is degraded: storage fault. Retry is scheduled.", "warning"]]);
+    await vi.waitFor(() => expect(publish.mock.calls.filter(([, engine, state]) => engine === "task" && state.state === "degraded")).toHaveLength(3), { timeout: 1000, interval: 1 });
+    await Promise.all(publish.mock.results.map(result => result.value));
     const failures = publish.mock.calls.filter(([, engine, state]) => engine === "task" && state.state === "degraded");
-    expect(failures).toHaveLength(3);
     expect(new Set(failures.map(([, , state]) => state.state === "degraded" && state.retryAt)).size).toBe(3);
     expect((await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task).toEqual(failures[2][2]);
     if (recovery === "retry") await vi.advanceTimersByTimeAsync(4000);
     else await harness.get("session_start")!({ reason: "reload" }, ctx);
-    expect(notices()).toHaveLength(2);
+    await vi.waitFor(() => expect(notices()).toHaveLength(2), { timeout: 1000, interval: 1 });
+    await Promise.all(publish.mock.results.map(result => result.value));
     expect(notices()[1]).toEqual(["Task delivery recovered.", "info"]);
     expect((await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task?.state).toBe("running");
     vi.spyOn(TaskChangeDelivery.prototype, "observeContext").mockRejectedValueOnce(new Error("second fault"));
@@ -289,7 +291,8 @@ describe("registered Pi Session adapter characterization", () => {
     expect(notices()).toHaveLength(3);
     expect(notices()[2]).toEqual(["Task delivery is degraded: second fault. Retry is scheduled.", "warning"]);
     await vi.advanceTimersByTimeAsync(1000);
-    expect(notices()).toHaveLength(4);
+    await vi.waitFor(() => expect(notices()).toHaveLength(4), { timeout: 1000, interval: 1 });
+    await Promise.all(publish.mock.results.map(result => result.value));
     expect(notices()[3]).toEqual(["Task delivery recovered.", "info"]);
     await harness.get("session_shutdown")!({ reason: "quit" }, ctx);
   });

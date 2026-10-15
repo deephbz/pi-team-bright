@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -183,12 +184,12 @@ describe("Alert acceptance followed by Coordination publication failure", () => 
 
     // Fail only the Alert event journal open. Native Message acceptance has
     // already committed when sendAlert reaches this Coordination boundary.
-    const originalOpen = fs.openSync;
+    const originalOpen = fsp.open.bind(fsp);
     const eventJournal = paths.teamEventJournalPath(state.teamName);
-    const publicationFailure = vi.spyOn(fs, "openSync").mockImplementation(((target: fs.PathLike, flags: fs.OpenMode, mode?: fs.Mode) => {
+    const publicationFailure = vi.spyOn(fsp, "open").mockImplementation(async (target, flags = "r", mode) => {
       if (String(target) === eventJournal) throw new Error("injected Alert event publication failure");
-      return originalOpen(target, flags, mode);
-    }) as typeof fs.openSync);
+      return originalOpen(target, flags as any, mode);
+    });
 
     const alertCall = {
       to: "*",

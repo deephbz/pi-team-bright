@@ -287,7 +287,7 @@ describe("Messaging Utilities", () => {
 
     const resultPromise = broadcastMessage("test-team", "sender", "broadcast text", "summary", undefined, undefined, alertMembership);
     await allStarted;
-    expect(started).toEqual(["worker-a", "worker-b", "worker-c"]);
+    expect([...started].sort()).toEqual(["worker-a", "worker-b", "worker-c"]);
 
     gates.get("worker-c")!.reject(new Error("worker-c delivery failed"));
     gates.get("worker-b")!.resolve();
