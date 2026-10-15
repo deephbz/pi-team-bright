@@ -227,7 +227,9 @@ describe("registered Pi Session adapter characterization", () => {
     const directStart = vi.spyOn(DirectMessageDelivery.prototype, "start");
     vi.useFakeTimers();
     const ctx = context(sessionFile), harness = extension();
-    await harness.get("session_start")!({ reason: "resume" }, ctx);
+    const startup = harness.get("session_start")!({ reason: "resume" }, ctx);
+    await vi.advanceTimersByTimeAsync(1000);
+    await startup;
     expect(harness.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: DIRECT_MESSAGE_CUSTOM_TYPE, content: expect.stringContaining("Alert survives unsupported Task storage.") }), expect.objectContaining({ triggerTurn: true }));
     const state = (await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task;
     expect(state).toMatchObject({ state: "degraded", operation: "start", message: UNSUPPORTED_BEADS_TEAM });
@@ -236,7 +238,9 @@ describe("registered Pi Session adapter characterization", () => {
     expect(taskStart).toHaveBeenCalledOnce();
     expect(directStart).toHaveBeenCalledOnce();
     expect(ctx.ui.notify.mock.calls.filter(([text]: [string]) => text.startsWith("Task delivery"))).toEqual([[`Task delivery stopped: ${UNSUPPORTED_BEADS_TEAM} It will not retry. Finish this Team with its original PTB version or start a new Team.`, "warning"]]);
-    await harness.get("session_shutdown")!({ reason: "quit" }, ctx);
+    const shutdown = harness.get("session_shutdown")!({ reason: "quit" }, ctx);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await shutdown;
   });
 
   it.each(["retry", "reload"] as const)("toasts once per delivery episode across %s recovery while persisting each retry", async recovery => {
@@ -261,10 +265,12 @@ describe("registered Pi Session adapter characterization", () => {
     vi.spyOn(DurableGraphTaskOrchestration.prototype, "reconcileReady").mockResolvedValue([]);
     const publish = vi.spyOn(TeamSessionLifecycleService.prototype, "writeDeliveryState");
     const ctx = context(sessionFile), harness = extension();
-    await harness.get("session_start")!({ reason: "resume" }, ctx);
-    await vi.advanceTimersByTimeAsync(1000 + 2000);
+    const startup = harness.get("session_start")!({ reason: "resume" }, ctx);
+    await vi.advanceTimersByTimeAsync(1000);
+    await startup;
+    await vi.advanceTimersByTimeAsync(1000 + 2000 + 1_000);
     const notices = () => ctx.ui.notify.mock.calls.filter(([text]: [string]) => /^Task delivery (is degraded|recovered)/.test(text));
-    expect(start).toHaveBeenCalledTimes(3);
+    await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(3), { timeout: 1000, interval: 10 });
     expect(notices()).toEqual([["Task delivery is degraded: storage fault. Retry is scheduled.", "warning"]]);
     await vi.waitFor(() => expect(publish.mock.calls.filter(([, engine, state]) => engine === "task" && state.state === "degraded")).toHaveLength(3), { timeout: 1000, interval: 1 });
     await Promise.all(publish.mock.results.map(result => result.value));
@@ -850,11 +856,15 @@ describe("registered Pi Session adapter characterization", () => {
       renameHooks.push(handlers.get("session_info_changed")!({ name: label }, ctx));
     });
 
-    await handlers.get("session_start")!({ reason: "resume" }, ctx);
+    const startup = handlers.get("session_start")!({ reason: "resume" }, ctx);
+    await vi.advanceTimersByTimeAsync(1_000);
+    await startup;
     expect(ctx.ui.setTitle).toHaveBeenCalledWith("worker");
     expect(titles).toEqual(["worker"]);
-    await vi.advanceTimersByTimeAsync(5_000);
-    expect(titles).toEqual(["worker", "worker", "worker", "worker"]);
+    for (const [delay, count] of [[500, 2], [1_500, 3], [3_000, 4]] as const) {
+      await vi.advanceTimersByTimeAsync(delay);
+      await vi.waitFor(() => expect(titles).toHaveLength(count), { timeout: 1000, interval: 10 });
+    }
 
     await handlers.get("turn_start")!({}, ctx);
     expect(ctx.ui.setTitle).toHaveBeenCalledTimes(5);

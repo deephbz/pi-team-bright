@@ -79,9 +79,11 @@ describe("native lead Team updates", () => {
       const call = read.mock.calls.at(-1);
       return call ? { sessionId: test.sessionFile, toolCallId: call[3], resultText: "", resultDigest: "", head: 1, epochId: test.config.epochId!, observation: { team: test.name, epoch: test.config.epochId!, binding: test.lead.membershipId!, from: 0, through: 1 } } : undefined;
     });
-    await test.emit("session_start", { reason: "resume" });
+    const startup = test.emit("session_start", { reason: "resume" });
+    await vi.advanceTimersByTimeAsync(1_000);
+    await startup;
     await vi.advanceTimersByTimeAsync(0);
-    expect(test.sent).toHaveLength(1);
+    await vi.waitFor(() => expect(test.sent).toHaveLength(1), { timeout: 1000, interval: 10 });
     expect(test.sent[0]).toMatchObject({ customType: TEAM_UPDATE_TYPE, details: { through: 1 } });
     expect(test.branch.filter(entry => entry.type === "custom")).toEqual([]);
     await test.emit("session_shutdown", { reason: "quit" });
