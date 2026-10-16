@@ -160,7 +160,7 @@ export class WorkerLaunchBridge {
     await this.dependencies.lifecyclePublication.recordWorkerPrepared({ teamName: request.teamName, workerName: prepared.name, membershipId: prepared.membershipId! });
     return { member: prepared, config, terminal, panePlacement, action: "created" };
   }
-  /** Every check that can refuse a spawn runs before the first durable write. */
+  /** Terminal and placement checks run before the first durable write, so their refusal writes nothing. */
   private async preflight(config: TeamConfig, membershipId?: string): Promise<{ terminal: TerminalAdapter; panePlacement: TeamPanePlacement }> {
     const terminal = await currentTerminalForTeam(config);
     assertLockDeadline();
@@ -169,17 +169,17 @@ export class WorkerLaunchBridge {
   private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number, observePane: (paneId: string) => void): Promise<WorkerLaunchResult> {
     const { member, config, terminal } = claim;
     const launchId = member.launch!.launchId;
-    const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(member.cwd);
-    const exactResume = claim.recoveryMode === "exact_session_resume";
-    const argv = this.dependencies.buildWorkerArgv(exactResume ? undefined : member.model, exactResume ? undefined : member.modelProfile?.thinking ?? member.thinking, aggregate.path, aggregate.projectTrusted);
-    if (exactResume) argv.push("--session", member.sessionFile!);
-    const env = { ...hostEnv().process.env, ...request.launchEnvironment, PI_TEAM_NAME: request.teamName, PI_AGENT_NAME: member.name,
-      PI_TEAM_MEMBERSHIP_ID: member.membershipId!, PI_AGENT_LAUNCH_ID: launchId, ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}) } as Record<string, string>;
-    const options: SpawnOptions = { name: member.name, cwd: member.cwd, argv, env, panePlacement: claim.panePlacement };
     let target: PreparedLaunchTarget | undefined;
     // Set before the first call that can start a process: prepare on a one-stage carrier, start on Herdr.
     let actuated = false;
     try {
+      const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(member.cwd);
+      const exactResume = claim.recoveryMode === "exact_session_resume";
+      const argv = this.dependencies.buildWorkerArgv(exactResume ? undefined : member.model, exactResume ? undefined : member.modelProfile?.thinking ?? member.thinking, aggregate.path, aggregate.projectTrusted);
+      if (exactResume) argv.push("--session", member.sessionFile!);
+      const env = { ...hostEnv().process.env, ...request.launchEnvironment, PI_TEAM_NAME: request.teamName, PI_AGENT_NAME: member.name,
+        PI_TEAM_MEMBERSHIP_ID: member.membershipId!, PI_AGENT_LAUNCH_ID: launchId, ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}) } as Record<string, string>;
+      const options: SpawnOptions = { name: member.name, cwd: member.cwd, argv, env, panePlacement: claim.panePlacement };
       if (request.initialMessage) await request.initialMessage();
       assertLockDeadline();
       actuated = carrierLaunchKind(config.terminalBackend) === "one_stage";

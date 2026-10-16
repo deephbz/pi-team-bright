@@ -84,6 +84,14 @@ it("retries an expired unstarted Herdr launch and keeps a fresh one pending", as
   expect(await g.bridge.ensureWorker(g.request("worker"))).toMatchObject({ action: "attention", reason: "launch_pending", nextActionHint: "wait" });
 });
 
+// The seven live wedge records were requested or unknown, not refused.
+it.each(["requested", "unknown"] as const)("stops a target-less %s Herdr launch without a terminal kill", async state => {
+  const f = await fixture([worker("worker", { pendingLaunchId: "L1", launch: { launchId: "L1", state, requestedAt: Date.now() } })]);
+  const kill = vi.spyOn(terminal, "kill");
+  expect(await f.lifecycle.stopWorker(f.name, "worker")).toEqual({ kind: "stopped", worker: "worker" });
+  expect(kill).not.toHaveBeenCalled();
+});
+
 it("keeps a pre-rc.1 target-less prepared record fail-closed", async () => {
   const f = await fixture([worker("worker", { pendingLaunchId: "L1" })]);
   expect(await f.lifecycle.stopWorker(f.name, "worker")).toMatchObject({ kind: "refused", reason: "stop_not_confirmed" });

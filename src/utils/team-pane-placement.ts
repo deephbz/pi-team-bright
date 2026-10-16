@@ -11,7 +11,7 @@ function paneTarget(config: TeamConfig, backend: string, member: Member, role: s
   return target.targetId;
 }
 
-/** A prepared Membership without a recorded target owns no pane to place against. */
+/** A prepared Membership without a recorded target gives placement no pane to split or avoid. */
 function ownsPane(member: Member): boolean {
   const state = parseMembership(member);
   return state.kind !== "prepared" || state.target !== undefined;
