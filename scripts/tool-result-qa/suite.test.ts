@@ -86,11 +86,13 @@ test("captures real nine-tool results for agent, machine, and TUI QA", async () 
       detect: () => true,
       isDirectCarrier: () => true,
       currentTargetId: () => "qa-pane-lead",
-      spawn: (options: { name: string }) => {
+      // A one-stage carrier: prepare creates the pane, and start only acknowledges it.
+      prepareSpawn: async (options: { name: string }) => {
         const id = `qa-pane-${options.name}`;
         livePanes.set(id, true);
         return id;
       },
+      startPrepared: async () => ({ state: "started" as const, fact: "carrier_start_accepted" }),
       kill: (id: string) => {
         if (!unkillablePanes.has(id)) livePanes.set(id, false);
       },
