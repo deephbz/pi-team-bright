@@ -15,7 +15,7 @@ import { memberTerminalTarget, terminalTarget } from "../utils/terminal-target";
 import { teamPanePlacement } from "../utils/team-pane-placement";
 import { carrierLaunchKind } from "../utils/terminal-adapter";
 import { currentTerminalForTeam } from "../utils/team-terminal";
-import type { SpawnOptions } from "../utils/terminal-adapter";
+import type { SpawnOptions, TeamPanePlacement, TerminalAdapter } from "../utils/terminal-adapter";
 import { withSemanticTrace } from "../utils/trace";
 import type { TeamLifecyclePublication, WorkerStartupObservation } from "./team-lifecycle-publication";
 import type { WorkerLaunchObservationState } from "../utils/receipt-types";
@@ -52,7 +52,8 @@ export function launchObservationState(observation: WorkerStartupObservation): W
 }
 export type ResolvedWorkerModel = { model?: string; binding?: Member["modelProfile"] };
 export function createWorkerLaunchBridge(dependencies: WorkerLaunchBridgeDependencies): WorkerLaunchBridge { return new WorkerLaunchBridge(dependencies); }
-type LaunchClaim = { member: Member; config: TeamConfig; action: "created" | "recovered"; recoveryMode?: WorkerRecoveryMode; lastStop?: CarrierView["lastStop"] };
+/** A claim carries the preflighted terminal and placement, so a refused spawn writes nothing. */
+type LaunchClaim = { member: Member; config: TeamConfig; terminal: TerminalAdapter; panePlacement: TeamPanePlacement; action: "created" | "recovered"; recoveryMode?: WorkerRecoveryMode; lastStop?: CarrierView["lastStop"] };
 
 /** A durable launch marker precedes every external effect. No readiness wait owns a lease. */
 export class WorkerLaunchBridge {
@@ -133,14 +134,16 @@ export class WorkerLaunchBridge {
         if (plan.action === "attention") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: plan.reason, nextActionHint: plan.nextActionHint,
           ...(plan.reason === "legacy_unverified" && view.attention ? { message: view.attention.message } : {}) };
         if (plan.action === "refuse") throw new Error(`Invalid carrier: ${plan.reason}`);
+        const { terminal, panePlacement } = await this.preflight(config, current.membershipId);
         const launchId = teams.newLaunchId();
         const { member: updated } = await teams.applyMembershipEvent(request.teamName, current.membershipId!, {
           type: "relaunch", launchId, at: hostEnv().clock.now(), carrier: carrierLaunchKind(config.terminalBackend),
           ...(status?.pid ? { prior: { pid: status.pid, osBirthToken: status.osBirthToken, bootId: status.bootId } } : {}),
         });
-        return { member: updated, config, action: plan.action === "recover" ? "recovered" : "created", ...(plan.action === "recover" ? { recoveryMode: plan.recoveryMode } : {}), lastStop: view.lastStop };
+        return { member: updated, config, terminal, panePlacement, action: plan.action === "recover" ? "recovered" : "created", ...(plan.action === "recover" ? { recoveryMode: plan.recoveryMode } : {}), lastStop: view.lastStop };
       });
     }
+    const { terminal, panePlacement } = await this.preflight(config);
     const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(request.cwd);
     let chosen: ResolvedWorkerModel;
     try { chosen = this.resolveInitialWorkerModel(request, config, aggregate); }
@@ -154,24 +157,31 @@ export class WorkerLaunchBridge {
     observe(prepared);
     assertLockDeadline();
     await this.dependencies.lifecyclePublication.recordWorkerPrepared({ teamName: request.teamName, workerName: prepared.name, membershipId: prepared.membershipId! });
-    return { member: prepared, config, action: "created" };
+    return { member: prepared, config, terminal, panePlacement, action: "created" };
   }
-  private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number, observePane: (paneId: string) => void): Promise<WorkerLaunchResult> {
-    const { member, config } = claim;
-    const launchId = member.launch!.launchId;
+  /** Every check that can refuse a spawn runs before the first durable write. */
+  private async preflight(config: TeamConfig, membershipId?: string): Promise<{ terminal: TerminalAdapter; panePlacement: TeamPanePlacement }> {
     const terminal = await currentTerminalForTeam(config);
     assertLockDeadline();
+    return { terminal, panePlacement: teamPanePlacement(config, terminal.name, membershipId) };
+  }
+  private async launch(request: WorkerLaunchRequest, claim: LaunchClaim, deadline: number, observePane: (paneId: string) => void): Promise<WorkerLaunchResult> {
+    const { member, config, terminal } = claim;
+    const launchId = member.launch!.launchId;
     const aggregate = (request.workerAggregate ?? this.dependencies.workerAggregate)(member.cwd);
     const exactResume = claim.recoveryMode === "exact_session_resume";
     const argv = this.dependencies.buildWorkerArgv(exactResume ? undefined : member.model, exactResume ? undefined : member.modelProfile?.thinking ?? member.thinking, aggregate.path, aggregate.projectTrusted);
     if (exactResume) argv.push("--session", member.sessionFile!);
     const env = { ...hostEnv().process.env, ...request.launchEnvironment, PI_TEAM_NAME: request.teamName, PI_AGENT_NAME: member.name,
       PI_TEAM_MEMBERSHIP_ID: member.membershipId!, PI_AGENT_LAUNCH_ID: launchId, ...(aggregate.path ? { PI_TEAM_BRIGHT_WORKER_AGGREGATE: aggregate.path } : {}) } as Record<string, string>;
-    const options: SpawnOptions = { name: member.name, cwd: member.cwd, argv, env, panePlacement: teamPanePlacement(config, terminal.name, member.membershipId) };
+    const options: SpawnOptions = { name: member.name, cwd: member.cwd, argv, env, panePlacement: claim.panePlacement };
     let target: PreparedLaunchTarget | undefined;
+    // Set before the first call that can start a process: prepare on a one-stage carrier, start on Herdr.
+    let actuated = false;
     try {
       if (request.initialMessage) await request.initialMessage();
       assertLockDeadline();
+      actuated = carrierLaunchKind(config.terminalBackend) === "one_stage";
       const terminalId = config.separateWindows ? await terminal.prepareWindow(options)
         : await terminal.prepareSpawn(options, deadline);
       target = { terminalId, isWindow: !!config.separateWindows, backend: terminal.name };
@@ -181,12 +191,19 @@ export class WorkerLaunchBridge {
       await teams.withCurrentMembershipLease(request.teamName, member.membershipId!, () => teams.applyMembershipEvent(request.teamName, member.membershipId!, {
         type: "record_target", launchId, target: terminalTarget(terminal.name, target!.isWindow ? "window" : "pane", terminalId) }));
       assertLockDeadline();
+      actuated = true;
       const completion = terminal.startPrepared(terminalId, options);
       void completion.then(result => this.completeLaunch(request.teamName, member.membershipId!, launchId, result))
         .catch(() => this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: "completion_unavailable" })).catch(() => undefined);
     } catch (error) {
+      const fact = error instanceof Error ? error.message : String(error);
+      if (!actuated) {
+        // No process can exist, so the launch is refused and the caller sees the cause.
+        await this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "refused", fact: `not_actuated: ${fact}` }, target).catch(() => undefined);
+        throw error;
+      }
       // Unknown effect keeps its marker and pane. Time and transport errors never authorize cleanup.
-      void this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact: error instanceof Error ? error.message : String(error) }, target).catch(() => undefined);
+      void this.completeLaunch(request.teamName, member.membershipId!, launchId, { state: "unknown", fact }, target).catch(() => undefined);
       if (error instanceof LockDeadlineError) throw error;
     }
     return { action: claim.action, member, membershipId: member.membershipId!, recoveryMode: claim.recoveryMode, target, launchId, launch: "requested", lastStop: claim.lastStop,
