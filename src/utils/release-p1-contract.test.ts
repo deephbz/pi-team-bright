@@ -366,7 +366,7 @@ describe("release P1 public contracts", () => {
     let replacementFinished = false;
     const replacement = (async () => {
       await teams.withCurrentMembershipLease(name, oldMember.membershipId!, async () => {
-        await teams.deactivateMembership(name, oldMember.membershipId!, "replaced");
+        await teams.deactivateMembership(name, oldMember.membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
       });
       await teams.addMember(name, member("worker", `/tmp/${name}-new.jsonl`));
       replacementFinished = true;

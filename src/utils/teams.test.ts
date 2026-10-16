@@ -154,7 +154,7 @@ describe("TeamConfig authority recovery", () => {
     await addMember(teamName, member("worker-a"));
     await expect(addMember(teamName, member("worker-b"))).rejects.toThrow(/Worker limit 1/i);
     await expect(addMember(teamName, { ...member("historical-worker"), isActive: false })).resolves.toBeUndefined();
-    await deactivateMembership(teamName, "membership-worker-a", "replaced");
+    await deactivateMembership(teamName, "membership-worker-a", "replaced", { authority: "process_stopped", carrier: "two_stage" });
     await expect(addMember(teamName, member("worker-b"))).resolves.toBeUndefined();
   });
 
@@ -181,8 +181,8 @@ describe("TeamConfig authority recovery", () => {
     ]);
     expect(results.filter(result => result.status === "fulfilled")).toHaveLength(1);
     expect(results.filter(result => result.status === "rejected")).toHaveLength(1);
-    await deactivateMembership(teamName, "membership-race-a", "replaced");
-    await deactivateMembership(teamName, "membership-race-b", "replaced");
+    await deactivateMembership(teamName, "membership-race-a", "replaced", { authority: "process_stopped", carrier: "two_stage" });
+    await deactivateMembership(teamName, "membership-race-b", "replaced", { authority: "process_stopped", carrier: "two_stage" });
     await expect(addMember(teamName, member("race-reuse"))).resolves.toBeUndefined();
   });
 

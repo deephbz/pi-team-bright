@@ -324,7 +324,7 @@ describe("Team identity footer projection", () => {
     }, () => model())).resolves.toBeUndefined();
     expect(fork.setFooter).toHaveBeenLastCalledWith(undefined);
 
-    await teams.deactivateMembership(teamName, lead.membershipId!, "replaced");
+    await teams.deactivateMembership(teamName, lead.membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
     const inactive = context(sessionFile);
     await expect(resolveTeamFooterBinding(inactive, {
       teamName,

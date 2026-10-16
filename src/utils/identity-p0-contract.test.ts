@@ -125,7 +125,7 @@ describe("identity P0: Membership generation and first Session binding", () => {
   it("allocates a distinct Membership identity for every lead generation", async () => {
     const teamName = uniqueTeam("lead-generation");
     const first = await teams.createTeam(teamName, "session-a", "lead-a");
-    await teams.deactivateMembership(teamName, first.members[0].membershipId!, "team_shutdown");
+    await teams.deactivateMembership(teamName, first.members[0].membershipId!, "team_shutdown", { authority: "process_stopped", carrier: "two_stage" });
     const second = await teams.createTeam(teamName, "session-b", "lead-b");
     const leadHistory = second.members.filter(member => member.name === "team-lead") as IdentityMember[];
 
@@ -179,7 +179,7 @@ describe("identity P0: Membership generation and first Session binding", () => {
     await bindMemberSession(teamName, "worker", sessionFile, undefined, { tmuxPaneId: "%resumed" });
     expect(currentMember(await teams.readConfig(teamName)).tmuxPaneId).toBe("%resumed");
 
-    await teams.deactivateMember(teamName, "worker", "process_shutdown");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "process_shutdown", { authority: "process_stopped", carrier: "two_stage" });
     await expect(bindMemberSession(teamName, "worker", sessionFile, undefined)).rejects.toThrow();
 
     const replacement = await addPrepared(teamName);
@@ -196,7 +196,7 @@ describe("identity P0: Membership generation and first Session binding", () => {
     const first = await addPrepared(teamName);
     const oldSession = `/tmp/${teamName}-old.jsonl`;
     await bindMemberSession(teamName, "worker", oldSession, first.pendingLaunchId, { tmuxPaneId: "%old" });
-    await teams.deactivateMember(teamName, "worker", "process_shutdown");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "process_shutdown", { authority: "process_stopped", carrier: "two_stage" });
 
     const replacement = await addPrepared(teamName);
     const currentSession = `/tmp/${teamName}-current.jsonl`;
@@ -253,7 +253,7 @@ describe("identity P0: generation-scoped Communication and runtime projections",
     const oldMessage = await messaging.sendPlainMessage(teamName, "team-lead", "worker", "old generation", "old", undefined, undefined, alertMembership);
     expect(oldMessage).toMatchObject({ recipientMembershipId: oldMember.membershipId });
 
-    await teams.deactivateMember(teamName, "worker", "process_shutdown");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "process_shutdown", { authority: "process_stopped", carrier: "two_stage" });
     const newMember = await addPrepared(teamName);
     const newSession = `/tmp/${teamName}-new.jsonl`;
     await bindMemberSession(teamName, "worker", newSession, newMember.pendingLaunchId);
@@ -350,7 +350,7 @@ describe("identity P0: generation-scoped Communication and runtime projections",
     const oldMember = await addPrepared(teamName);
     const oldSession = `/tmp/${teamName}-old.jsonl`;
     await bindMemberSession(teamName, "worker", oldSession, oldMember.pendingLaunchId);
-    await teams.deactivateMember(teamName, "worker", "process_shutdown");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "process_shutdown", { authority: "process_stopped", carrier: "two_stage" });
     const newMember = await addPrepared(teamName);
     const newSession = `/tmp/${teamName}-new.jsonl`;
     await bindMemberSession(teamName, "worker", newSession, newMember.pendingLaunchId);

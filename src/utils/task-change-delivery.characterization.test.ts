@@ -81,7 +81,7 @@ describe("TaskChangeDelivery current behavior characterization", () => {
       recipientSessionFile: sessionFile,
     });
 
-    await teams.deactivateMember(teamName, "worker", "replaced");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
     const replacementSession = `${sessionFile}.replacement`;
     await teams.addMember(teamName, {
       agentId: `replacement@${teamName}`,
@@ -140,7 +140,7 @@ describe("TaskChangeDelivery current behavior characterization", () => {
     const batch = current.sink.sendMessage.mock.calls[0][0];
     await current.delivery.observeContext([{ role: "custom", customType: batch.customType, details: batch.details }]);
 
-    await teams.deactivateMember(teamName, "worker", "replaced");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
     await teams.addMember(teamName, {
       agentId: `replacement@${teamName}`,
       name: "worker",

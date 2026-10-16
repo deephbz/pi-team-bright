@@ -200,7 +200,7 @@ describe("strict current teammate binding", () => {
       reason: "not_bound",
     });
 
-    await teams.deactivateMembership(name, current.membershipId!, "replaced");
+    await teams.deactivateMembership(name, current.membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
     await teams.addMember(
       name,
       member({

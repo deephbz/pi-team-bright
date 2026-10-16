@@ -182,7 +182,7 @@ describe("Pi session lifecycle", () => {
     ctx.shutdown = vi.fn();
     const startup = handlers.get("session_start")?.({ reason: "resume" }, ctx);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    await teams.deactivateMember(teamName, "worker", "replaced");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
     const replacement = { ...oldWorker, membershipId: teams.newMembershipId(), agentId: `replacement-worker@${teamName}`, tmuxPaneId: "%replacement" };
     await teams.addMember(teamName, replacement);
     release();
