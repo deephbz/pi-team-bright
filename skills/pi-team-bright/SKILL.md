@@ -131,6 +131,8 @@ increase useful learning within the same budget.
 
 `ensure_worker` can return `attention`; follow its reason and next-action hint.
 For `receipt_deadline`, call `ensure_worker` again; a stalled launch becomes `launch_stalled`.
+`launch_pending` with `wait` means a recorded launch can still bind; wait for its update.
+An expired launch that never started retries automatically on the next `ensure_worker`.
 `launch_stalled` requires human review of the named pane. With human approval,
 use `worker_stop` to end that launch before `ensure_worker` creates another.
 Unknown launch evidence never authorizes another spawn.
