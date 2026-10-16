@@ -1,5 +1,5 @@
 import { hostEnv } from "../env/host-env";
-import type { StopAuthority } from "./membership-machine";
+import { mayOwnProcess, parseMembership, type StopAuthority } from "./membership-machine";
 import { carrierLaunchKind } from "../utils/terminal-adapter";
 import { readProcessGeneration } from "../env/async-process-generation";
 import * as paths from "../utils/paths";
@@ -134,6 +134,8 @@ export class TeamLifecycleService {
     const teamConfig = await teams.readConfig(teamName);
     const teamTerminal = await terminalForTeam(teamConfig);
     const target = teamConfig.terminalBackend ? assertTeamTerminalTarget(teamConfig, member) : memberTerminalTarget(member, teamTerminal.name);
+    // A runtime record for this Membership proves a process existed; only its absence lets durable state decide.
+    if (!target && status?.membershipId !== member.membershipId && !mayOwnProcess(parseMembership(member), carrierLaunchKind(teamConfig.terminalBackend))) return "no_process_possible";
     if (!target) throw new Error(`Cannot stop ${member.name}: this Membership has no terminal binding and no exact Membership-bound runtime record proves the process exited. The Membership remains current.`);
     assertTargetSupportedByTerminal(teamTerminal, target);
     if (target.kind === "window") {

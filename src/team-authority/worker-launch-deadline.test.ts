@@ -62,5 +62,6 @@ it.each([false, true])("bounds post-split target CAS and fences later reconcilia
   const current = await teams.currentMembership(f.name, "worker");
   expect(start).not.toHaveBeenCalled();
   if (successor) { expect(current.launch?.launchId).toBe("successor"); expect(current.terminalTarget).toBeUndefined(); }
-  else { expect(current.launch).toMatchObject({ state: "unknown", fact: "receipt_deadline_expired" }); expect(current.terminalTarget?.targetId).toBe("prepared-pane"); }
+  // Herdr had not started Pi, so the expired CAS refuses the launch; the prepared pane stays recorded for stop.
+  else { expect(current.launch).toMatchObject({ state: "refused", fact: "not_actuated: receipt_deadline_expired" }); expect(current.terminalTarget?.targetId).toBe("prepared-pane"); }
 });

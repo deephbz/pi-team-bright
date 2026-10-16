@@ -1,4 +1,5 @@
 import type { Member, TeamConfig, TerminalTarget } from "../team-authority/contracts";
+import { parseMembership } from "../team-authority/membership-machine";
 import { memberTerminalTarget } from "./terminal-target";
 import type { TeamPanePlacement } from "./terminal-adapter";
 
@@ -8,6 +9,12 @@ function paneTarget(config: TeamConfig, backend: string, member: Member, role: s
     throw new Error(`${role} ${member.name} has no exact ${backend} pane target; refusing Worker spawn.`);
   }
   return target.targetId;
+}
+
+/** A prepared Membership without a recorded target owns no pane to place against. */
+function ownsPane(member: Member): boolean {
+  const state = parseMembership(member);
+  return state.kind !== "prepared" || state.target !== undefined;
 }
 
 /**
@@ -24,6 +31,7 @@ export function teamPanePlacement(
   const leaderPaneId = paneTarget(config, backend, lead, "Team leader");
   const workerPaneIds = config.members
     .filter((member) => member.agentType === "teammate" && member.isActive !== false && member.membershipId !== excludeMembershipId)
+    .filter((member) => ownsPane(member))
     .map((member) => paneTarget(config, backend, member, "Current Team Worker"));
 
   if (workerPaneIds.includes(leaderPaneId) || new Set(workerPaneIds).size !== workerPaneIds.length) {
