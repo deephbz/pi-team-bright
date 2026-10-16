@@ -47,7 +47,7 @@ import { projectToolTuiMessage } from "../model-tool-contract/tui-projection";
 beforeEach(() => { fixture.members = []; fixture.separateWindows = false; fixture.mutations = []; fixture.leased = false; fixture.splits = 0; fixture.starts = 0; });
 afterEach(() => { vi.restoreAllMocks(); });
 it.each(["started", "unknown"] as const)("returns launch_stalled for an old %s launch with no agent in its pane", async state => {
-  fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },
+  fixture.members = [{ name: "worker", agentType: "teammate", membershipId: "membership", pendingLaunchId: "launch", terminalTarget: { backend: "herdr", kind: "pane", targetId: "pane" },
     launch: { launchId: "launch", state, requestedAt: Date.now() - 16000 } } as Member];
   const run = vi.spyOn(nodeHostEnv.exec, "run").mockResolvedValue({ kind: "exited", status: 0, stdout: JSON.stringify({ result: { agents: [] } }), stderr: "" });
   const bridge = new WorkerLaunchBridge({ buildWorkerArgv: () => ["pi"], workerAggregate: () => ({ projectTrusted: false }), lifecyclePublication: {} as any });
