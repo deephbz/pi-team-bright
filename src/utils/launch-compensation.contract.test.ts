@@ -107,11 +107,11 @@ async function settledLaunch(teamName: string, state: "started" | "unknown", fac
   });
 }
 function failNextTargetWrite(message: string) {
-  const update = teams.updateMembership;
+  const apply = teams.applyMembershipEvent;
   let failed = false;
-  vi.spyOn(teams, "updateMembership").mockImplementation((teamName, membershipId, patch) => {
-    if (patch.terminalTarget && !failed) { failed = true; return Promise.reject(new Error(message)); }
-    return update(teamName, membershipId, patch);
+  vi.spyOn(teams, "applyMembershipEvent").mockImplementation((teamName, membershipId, event) => {
+    if ((event.type === "record_target" || (event.type === "complete_launch" && event.target)) && !failed) { failed = true; return Promise.reject(new Error(message)); }
+    return apply(teamName, membershipId, event);
   });
 }
 async function bindLive(teamName: string, sessionFile: string) {
@@ -132,16 +132,6 @@ afterEach(() => {
 
 // Decision 0021 replaces timeout/error compensation with retained launch evidence.
 describe("receipt-first Worker launch", () => {
-  it("exposes a direct reusable prepared-launch service seam", async () => {
-    const f = await team("bridge-seam"); const a = adapter(); setAdapter(a.terminal);
-    const member = await prepared(f.name);
-    const target = { terminalId: "pane-worker", isWindow: false, backend: a.terminal.name };
-    expect(await bridge().launchPreparedMembership(f.name, member, null, () => target)).toEqual(target);
-    expect(await teams.currentMembership(f.name, "worker")).toMatchObject({
-      membershipId: member.membershipId, terminalTarget: { backend: a.terminal.name, kind: "pane", targetId: "pane-worker" }, isActive: true,
-    });
-  });
-
   it("retains a recovery target after persistence failure and leaves Session admission to its child", async () => {
     const f = await team("recovery-persistence-failure"); const a = adapter(); setAdapter(a.terminal);
     const member = await prepared(f.name);

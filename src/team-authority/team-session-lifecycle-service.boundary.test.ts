@@ -41,7 +41,7 @@ vi.mock("../utils/teams", () => ({
     return action();
   },
   bindMemberSession: () => { fixture.events.push("bind"); return fixture.bind(); },
-  updateMembership: () => { fixture.events.push("membership-update"); return fixture.update(); },
+  applyMembershipEvent: () => { fixture.events.push("membership-update"); return fixture.update(); },
   assertCurrentSessionBinding: () => { fixture.events.push("exact-binding"); return fixture.current; },
 }));
 
