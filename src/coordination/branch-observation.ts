@@ -39,7 +39,8 @@ function contentResult(content: unknown): any {
 }
 /** Only the authorized reader supplies scope. Copied entries cannot bind a fork. */
 export function readBranchObservation(branch: readonly BranchEntry[], scope: Pick<ObservationStamp, "team" | "epoch" | "binding">): BranchObservation | undefined {
-  let baseline: BranchObservation | undefined;
+  // The last stamped entry wins. Build its lineage and revision once, after the scan.
+  let last: { index: number; cursor: number } | undefined;
   const tasks = new Map<string, CanonicalTaskCard>();
   let complete = false;
   for (const [index, entry] of branch.entries()) {
@@ -49,7 +50,7 @@ export function readBranchObservation(branch: readonly BranchEntry[], scope: Pic
     const details = custom ? entry.details : entry.message?.details;
     const stamp = observationStamp(custom ? details : object(details) ? details.observation : undefined);
     if (!stamp || stamp.team !== scope.team || stamp.epoch !== scope.epoch || stamp.binding !== scope.binding) continue;
-    if (baseline && stamp.through < Number(baseline.cursor)) continue;
+    if (last && stamp.through < last.cursor) continue;
     const result = custom ? contentResult(entry.content) : details;
     if (result?.kind === "snapshot" && Array.isArray(result.tasks)) {
       tasks.clear();
@@ -58,13 +59,14 @@ export function readBranchObservation(branch: readonly BranchEntry[], scope: Pic
     } else if (result?.kind === "updates" && Array.isArray(result.task_changes)) {
       for (const change of result.task_changes) if (change.current) tasks.set(change.current.id, change.current);
     }
-    baseline = {
-      entryId: entry.id,
-      lineage: branch.slice(0, index + 1).map(item => item.id),
-      cursor: String(stamp.through),
-      authorityRevisions: complete ? { task_projection: taskProjectionRevision([...tasks.values()], [...tasks.values()].flatMap(task => task.projection_warnings ?? [])) } : {},
-      taskIds: [...tasks.keys()],
-    };
+    last = { index, cursor: stamp.through };
   }
-  return baseline;
+  if (!last) return undefined;
+  return {
+    entryId: branch[last.index]!.id,
+    lineage: branch.slice(0, last.index + 1).map(item => item.id),
+    cursor: String(last.cursor),
+    authorityRevisions: complete ? { task_projection: taskProjectionRevision([...tasks.values()], [...tasks.values()].flatMap(task => task.projection_warnings ?? [])) } : {},
+    taskIds: [...tasks.keys()],
+  };
 }
