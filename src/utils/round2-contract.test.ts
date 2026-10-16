@@ -28,15 +28,4 @@ describe("graph Task delivery contracts", () => {
     expect(reconcile).toHaveBeenCalledTimes(1);
     delivery.stop();
   });
-
-  it("deactivates only current memberships while retaining Session history", async () => {
-    const { name } = await fixture("shutdown");
-    await teams.deactivateMember(name, "worker", "replaced");
-    await teams.addMember(name, { membershipId: teams.newMembershipId(), agentId: `worker@${name}-next`, name: "worker", agentType: "teammate", joinedAt: Date.now(), sessionFile: `/tmp/${name}-current.jsonl`, cwd: process.cwd(), subscriptions: [], isActive: true });
-    const result = await teams.deactivateCurrentMembers(name, "team_shutdown");
-    expect(result.deactivated.map(member => member.sessionFile)).toContain(`/tmp/${name}-current.jsonl`);
-    const members = (await teams.readConfig(name)).members.filter(member => member.name === "worker");
-    expect(members).toHaveLength(2);
-    expect(members.every(member => member.isActive === false)).toBe(true);
-  });
 });

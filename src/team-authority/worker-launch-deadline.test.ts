@@ -44,7 +44,8 @@ it.each([false, true])("bounds post-split target CAS and fences later reconcilia
     const member = await teams.currentMembership(f.name, "worker");
     lease = withLockDeadline(Infinity, () => teams.withMembershipMutationLease(f.name, member.membershipId!, async () => {
       acquired.resolve(); await release.promise;
-      if (successor) await teams.updateMembership(f.name, member.membershipId!, { launch: { launchId: "successor", state: "requested", requestedAt: Date.now() } });
+      // A successor writer replaces the launch fence; the raw write stands in for its commit.
+      if (successor) { const config = await teams.readConfig(f.name); writeJsonFixture(configPath(f.name), { ...config, members: config.members.map(m => m.membershipId === member.membershipId ? { ...m, launch: { launchId: "successor", state: "requested", requestedAt: Date.now() } } : m) }); }
     }));
     await acquired.promise; return "prepared-pane";
   });

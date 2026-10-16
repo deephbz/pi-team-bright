@@ -44,7 +44,7 @@ describe("Membership-scoped graph mutation lease contract", () => {
     while (!entered) await new Promise(resolve => setTimeout(resolve, 5));
     let replacementFinished = false;
     const replacement = (async () => {
-      await teams.withCurrentMembershipLease(f.teamName, f.alpha.membershipId!, async () => teams.deactivateMembership(f.teamName, f.alpha.membershipId!, "replaced"));
+      await teams.withCurrentMembershipLease(f.teamName, f.alpha.membershipId!, async () => teams.deactivateMembership(f.teamName, f.alpha.membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" }));
       await teams.addMember(f.teamName, member(f.teamName, "alpha")); replacementFinished = true;
     })();
     await new Promise(resolve => setTimeout(resolve, 30)); expect(replacementFinished).toBe(false);
@@ -61,7 +61,7 @@ describe("Membership-scoped graph mutation lease contract", () => {
     let shutdownFinished = false;
     const shutdown = (async () => {
       const current = (await teams.readConfig(f.teamName)).members.filter(candidate => candidate.isActive !== false);
-      await Promise.all(current.map(candidate => teams.withCurrentMembershipLease(f.teamName, candidate.membershipId!, async () => teams.deactivateMembership(f.teamName, candidate.membershipId!, "team_shutdown"))));
+      await Promise.all(current.map(candidate => teams.withCurrentMembershipLease(f.teamName, candidate.membershipId!, async () => teams.deactivateMembership(f.teamName, candidate.membershipId!, "team_shutdown", { authority: "process_stopped", carrier: "two_stage" }))));
       shutdownFinished = true;
     })();
     await new Promise(resolve => setTimeout(resolve, 30)); expect(shutdownFinished).toBe(false);

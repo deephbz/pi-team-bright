@@ -96,7 +96,7 @@ describe("registered Worker identity and process-admission characterization", ()
     expect(await runtime.deleteRuntimeStatus(teamName, "worker", {
       membershipId: oldMembershipId, pid: process.pid, startedAt: 1,
     })).toBe(true);
-    expect((await teams.deactivateMembership(teamName, oldMembershipId, "replaced"))?.membershipId).toBe(oldMembershipId);
+    expect((await teams.deactivateMembership(teamName, oldMembershipId, "replaced", { authority: "process_stopped", carrier: "two_stage" }))?.membershipId).toBe(oldMembershipId);
     const replacementMembershipId = teams.newMembershipId();
     const launchId = teams.newLaunchId();
     await teams.addMember(teamName, preparedMember(teamName, replacementMembershipId, launchId));

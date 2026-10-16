@@ -862,24 +862,6 @@ export async function addMember(teamName: string, member: Member) {
   });
 }
 
-export async function deactivateMember(
-  teamName: string,
-  agentName: string,
-  reason: NonNullable<Member["deactivationReason"]>,
-): Promise<Member | null> {
-  const p = configPath(teamName);
-  return withLock(p, async () => {
-    const config = readConfigRaw(p);
-    const member = config.members.find((candidate) => candidate.name === agentName && candidate.isActive !== false);
-    if (!member) return null;
-    member.isActive = false;
-    member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
-    member.deactivationReason = reason;
-    await writeJsonAtomicAsync(p, config);
-    return structuredClone(member);
-  });
-}
-
 /**
  * Deactivate exactly one Membership generation; never resolve by reusable name.
  * The caller names the evidence that authorizes the stop; the machine checks it.
@@ -888,7 +870,7 @@ export async function deactivateMembership(
   teamName: string,
   membershipId: string,
   reason: NonNullable<Member["deactivationReason"]>,
-  authority: { authority: StopAuthority; carrier: CarrierLaunchKind } = { authority: "process_stopped", carrier: "two_stage" },
+  authority: { authority: StopAuthority; carrier: CarrierLaunchKind },
 ): Promise<Member | null> {
   try {
     return (await applyMembershipEvent(teamName, membershipId, { type: "deactivate", reason, at: hostEnv().clock.now(), ...authority })).member;
@@ -898,58 +880,3 @@ export async function deactivateMembership(
   }
 }
 
-export async function deactivateCurrentMembers(
-  teamName: string,
-  reason: NonNullable<Member["deactivationReason"]>,
-): Promise<{ deactivated: Member[]; staleBindings: Member[] }> {
-  const p = configPath(teamName);
-  return withLock(p, async () => {
-    const config = readConfigRaw(p);
-    const current = config.members.filter((member) => member.isActive !== false);
-    const staleBindings = config.members.filter((member) => member.isActive === false && !!(member.terminalTarget || member.tmuxPaneId || member.windowId));
-    const at = new Date(hostEnv().clock.now()).toISOString();
-    for (const member of current) {
-      member.isActive = false;
-      member.deactivatedAt = at;
-      member.deactivationReason = reason;
-    }
-    if (current.length > 0) await writeJsonAtomicAsync(p, config);
-    return { deactivated: structuredClone(current), staleBindings: structuredClone(staleBindings) };
-  });
-}
-
-export async function updateMember(teamName: string, agentName: string, updates: Partial<Member>) {
-  const p = configPath(teamName);
-  await withLock(p, async () => {
-    const config = readConfigRaw(p);
-    const m = [...config.members].reverse().find(m => m.name === agentName && m.isActive !== false);
-    if (m) {
-      if (updates.terminalTarget) {
-        assertTerminalTargetShape(updates.terminalTarget, "Membership terminal target");
-        if (!config.terminalBackend || updates.terminalTarget.backend !== config.terminalBackend) {
-          throw new Error(`Terminal target backend ${updates.terminalTarget.backend} does not match Team ${teamName} backend ${config.terminalBackend || "<missing>"}.`);
-        }
-      }
-      Object.assign(m, updates);
-      await writeJsonAtomicAsync(p, config);
-    }
-  });
-}
-
-export async function updateMembership(teamName: string, membershipId: string, updates: Partial<Member>): Promise<Member> {
-  const p = configPath(teamName);
-  return withLock(p, async () => {
-    const config = readConfigRaw(p);
-    const member = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
-    if (!member) throw new Error(`Membership ${membershipId} is not current in team ${teamName}.`);
-    if (updates.terminalTarget) {
-      assertTerminalTargetShape(updates.terminalTarget, "Membership terminal target");
-      if (!config.terminalBackend || updates.terminalTarget.backend !== config.terminalBackend) {
-        throw new Error(`Terminal target backend ${updates.terminalTarget.backend} does not match Team ${teamName} backend ${config.terminalBackend || "<missing>"}.`);
-      }
-    }
-    Object.assign(member, updates);
-    await writeJsonAtomicAsync(p, config);
-    return structuredClone(member);
-  });
-}

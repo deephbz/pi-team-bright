@@ -113,7 +113,7 @@ describe("clean-cut Team recreation", () => {
     const name = uniqueTeam("closed");
     const first = await createTeam(name, "/tmp/lead-old.jsonl", "lead-old", "old");
     const oldLead = first.members.find((member) => member.name === "team-lead")!;
-    await deactivateMembership(name, oldLead.membershipId!, "team_shutdown");
+    await deactivateMembership(name, oldLead.membershipId!, "team_shutdown", { authority: "process_stopped", carrier: "two_stage" });
 
     const recreated = await createTeam(name, "/tmp/lead-new.jsonl", "lead-new", "new");
     const persisted = await readConfig(name);

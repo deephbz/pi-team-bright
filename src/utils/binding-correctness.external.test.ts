@@ -122,7 +122,7 @@ describe("external current-binding contract", () => {
     expect(await messaging.readInbox(name, "worker", false, false)).toHaveLength(1);
     expect(fs.readFileSync(paths.runtimeStatusPath(name, "worker"), "utf8")).toBe(runtimeBefore);
 
-    await teams.deactivateMember(name, "worker", "replaced");
+    await teams.deactivateMembership(name, (await teams.currentMembership(name, "worker")).membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
     const inboxBefore = fs.readFileSync(paths.inboxPath(name, "worker"), "utf8");
     const removed: any = await send.execute("removed", {
       to: "worker",

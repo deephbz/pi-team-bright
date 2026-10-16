@@ -65,7 +65,7 @@ describe("preview Team authority coordinates", () => {
 
     const first = await createTeam("preview-team", "/tmp/lead-a.jsonl", "lead-a");
     await ensureLogicalWorker("preview-team", { name: "product", scope: "Operator value" });
-    await deactivateMembership("preview-team", first.members[0].membershipId!, "team_shutdown");
+    await deactivateMembership("preview-team", first.members[0].membershipId!, "team_shutdown", { authority: "process_stopped", carrier: "two_stage" });
 
     const second = await createTeam("preview-team", "/tmp/lead-b.jsonl", "lead-b");
     expect(second.epochId).not.toBe(first.epochId);

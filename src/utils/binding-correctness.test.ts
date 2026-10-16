@@ -106,7 +106,7 @@ describe("current team binding correctness", () => {
         task_state_changed: false,
       },
     });
-    await teams.deactivateMember(teamName, "worker", "replaced");
+    await teams.deactivateMembership(teamName, (await teams.currentMembership(teamName, "worker")).membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
 
     const refused: any = await sendAlert.execute("rejected", {
       to: "worker",
@@ -227,7 +227,6 @@ describe("current team binding correctness", () => {
     const teamName = testTeamName("stale-pid");
     const leadSession = `/tmp/${teamName}-lead.jsonl`;
     await teams.createTeam(teamName, leadSession, "lead-agent");
-    await teams.updateMember(teamName, "team-lead", { sessionFile: leadSession });
     await teams.addMember(teamName, {
       agentId: `worker@${teamName}`,
       name: "worker",

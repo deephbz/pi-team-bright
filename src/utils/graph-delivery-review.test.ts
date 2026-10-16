@@ -95,7 +95,7 @@ it("persists the target before enqueue and reuses it after resolution failure an
   } finally { old.delivery.stop(); fault.mockRestore(); }
   const first = await readTaskDeliveries(f.name, "worker"); expect(first).toHaveLength(1);
   const member = await teams.currentMembership(f.name, "worker");
-  await teams.withCurrentMembershipLease(f.name, "old", () => teams.deactivateMembership(f.name, "old", "replaced"));
+  await teams.withCurrentMembershipLease(f.name, "old", () => teams.deactivateMembership(f.name, "old", "replaced", { authority: "process_stopped", carrier: "two_stage" }));
   await teams.addMember(f.name, { ...member, membershipId: "new", sessionFile: "/synthetic/new", isActive: true });
   expect(await reconcileTaskChanges(f.name, "worker", f.graph)).toBe(0);
   const replacement = f.engine("new");

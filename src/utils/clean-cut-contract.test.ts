@@ -77,7 +77,7 @@ describe("graph-only public contracts", () => {
 
   it("does not send a pending Task change to a replacement Membership", async () => {
     const { name, worker, workerSession, authority } = await fixture("membership-fence");
-    await teams.deactivateMember(name, "worker", "replaced");
+    await teams.deactivateMembership(name, (await teams.currentMembership(name, "worker")).membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" });
     const replacementSession = `/tmp/${name}-replacement.jsonl`;
     await teams.addMember(name, { membershipId: teams.newMembershipId(), agentId: `worker-next@${name}`, name: "worker", agentType: "teammate", joinedAt: Date.now(), sessionFile: replacementSession, cwd: process.cwd(), subscriptions: [], isActive: true });
     const send = vi.fn();

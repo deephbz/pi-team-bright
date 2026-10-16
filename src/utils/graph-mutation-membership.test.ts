@@ -59,7 +59,7 @@ for (const [actor, toolName] of [["worker", "task_update"], ["team-lead", "task_
       }, lifecyclePublication: new DurableTeamLifecyclePublication() });
       expect((await lifecycle.shutdownTeam(f.name)).kind).toBe("shutdown");
     } else if (mode === "replacement") {
-      await teams.withCurrentMembershipLease(f.name, member.membershipId!, () => teams.deactivateMembership(f.name, member.membershipId!, "replaced"));
+      await teams.withCurrentMembershipLease(f.name, member.membershipId!, () => teams.deactivateMembership(f.name, member.membershipId!, "replaced", { authority: "process_stopped", carrier: "two_stage" }));
       const replacement = { ...member, membershipId: "replacement", sessionFile: "/synthetic/replacement", isActive: true };
       if (actor === "team-lead") {
         const config = await teams.readConfig(f.name); config.members.push(replacement); writeJsonFixture(paths.configPath(f.name), config);
@@ -85,7 +85,7 @@ it("holds the exact Membership lease through the registered graph commit", async
   const operation = tools.get("task_update").execute("claim", { task_id: f.task.id, operation_id: "claim", expected_version: f.task.version, transition: "claim" }, undefined, undefined, f.context(f.workerSession));
   await entered.promise;
   let retired = false;
-  const replacement = teams.withCurrentMembershipLease(f.name, "old-worker", async () => { await teams.deactivateMembership(f.name, "old-worker", "replaced"); retired = true; });
+  const replacement = teams.withCurrentMembershipLease(f.name, "old-worker", async () => { await teams.deactivateMembership(f.name, "old-worker", "replaced", { authority: "process_stopped", carrier: "two_stage" }); retired = true; });
   await new Promise(resolve => setTimeout(resolve, 30));
   expect(retired).toBe(false);
   gate.resolve();
