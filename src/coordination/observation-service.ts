@@ -57,8 +57,8 @@ export class CoordinationObservationService {
       || held.branch.some((id, index) => entries[index]?.id !== id)) this.clearPending(session);
   }
   setBranchContext(session: string, ids: string[]): void {
-    const existing = this.branches.get(session) ?? [];
-    this.setBranchEntries(session, ids.map(id => existing.find(entry => entry.id === id) ?? { id, type: "unknown" }));
+    const existing = new Map((this.branches.get(session) ?? []).map(entry => [entry.id, entry]));
+    this.setBranchEntries(session, ids.map(id => existing.get(id) ?? { id, type: "unknown" }));
   }
   branchContext(session: string): string[] { return (this.branches.get(session) ?? []).map(entry => entry.id); }
   clearPending(session: string): void {
@@ -81,7 +81,8 @@ export class CoordinationObservationService {
   }
   private baseline(bound: BoundTeam, ids?: string[]): BranchObservation | undefined {
     const branch = this.branches.get(bound.sessionFile) ?? [];
-    return readBranchObservation(ids ? branch.filter(entry => ids.includes(entry.id)) : branch, { team: bound.teamName, epoch: bound.config.epochId, binding: bound.membershipId });
+    const selected = ids && new Set(ids);
+    return readBranchObservation(selected ? branch.filter(entry => selected.has(entry.id)) : branch, { team: bound.teamName, epoch: bound.config.epochId, binding: bound.membershipId });
   }
   async selectTeamSyncView(file: string, ids: string[]): Promise<"snapshot" | "updates"> {
     const bound = await this.boundTeam(file);
@@ -152,7 +153,8 @@ export class CoordinationObservationService {
       held.stamp = { team: bound.teamName, epoch: bound.config.epochId, binding: bound.membershipId, from: Number(baseline?.cursor ?? 0), through: Number(baseline?.cursor ?? 0) };
       const result = await this.observe(bound, view, baseline, context, automatic);
       const latest = await this.boundTeam(file);
-      if (signal.aborted || this.reservations.get(file) !== held || held.branch.some((id, index) => this.branchContext(file)[index] !== id)) return { kind: "cancelled", message: "The observation was cancelled before native persistence." };
+      const branch = this.branchContext(file);
+      if (signal.aborted || this.reservations.get(file) !== held || held.branch.some((id, index) => branch[index] !== id)) return { kind: "cancelled", message: "The observation was cancelled before native persistence." };
       if (!latest || latest.membershipId !== bound.membershipId || latest.config.epochId !== bound.config.epochId || latest.teamName !== bound.teamName) return { kind: "unavailable", reason: "no_active_team", message: "The leader binding changed during observation." };
       if ("head" in result) { held.stamp.through = result.head; held.result = result; }
       return result;
