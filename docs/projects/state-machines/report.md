@@ -118,7 +118,7 @@ Gates at `d645d46` (`/tmp/ptb-sm/gates-d645d46.md`):
 | `npm test` | 2,109 tests pass | 2,148 tests pass |
 | campaign + v3.1 receipts | 4 pass | 4 pass |
 | test lanes | 208 / 184 / 24 | 212 / 188 / 24 |
-| exhaustive lane | not run | 1 failure: the tool-result QA suite |
+| exhaustive lane | not run | 1 failure: the tool-result QA suite (fixture fixed in `adba806`) |
 
 `adba806` fixes the QA failure. The QA suite now passes on sm and rc.4:
 - **Cause:** the QA fake terminal had no `prepareSpawn`. Every QA spawn
@@ -130,10 +130,14 @@ Gates at `d645d46` (`/tmp/ptb-sm/gates-d645d46.md`):
   `session_start`. Production always sets that context. The QA
   `team_create` case already fails on rc.4 for the same reason.
 
-Timing: `npm test` took 137 s on `d645d46` against 69 s at baseline. Task
-hydration p50 went from 0.1 ms to about 0.2 ms. Both runs shared the machine
-with another full lane, and the diff changes no Task-hydration code. A
-quiet-machine rerun is still due before merge.
+Timing: the first gate run measured 137 s on `d645d46` against 69 s at
+baseline. An interleaved A/B rerun under equal load (load average 5-7) found
+the cause: the 52 s conformance replay ran in the fast lane. It now runs in
+the exhaustive lane with the other campaign replays. After that change,
+`npm test` takes 74-75 s on this branch against 60-66 s on rc.4. The 9 s
+simulator wedge replay stays in the fast lane as the headline regression and
+explains most of the difference. Task hydration p50 is 0.1 ms on both
+revisions. Logs: `/tmp/ptb-sm/ab2-*.log`.
 
 ## Cost
 

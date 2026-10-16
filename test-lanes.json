@@ -4,6 +4,7 @@
     "sim/v31-campaign.test.ts",
     "sim/v31-receipts.test.ts",
     "sim/campaign.test.ts",
+    "sim/membership-conformance.test.ts",
     "scripts/snapshot-agent-surface.test.ts",
     "scripts/tool-result-qa/suite.test.ts",
     "src/utils/alert-publication-failure.characterization.test.ts",
