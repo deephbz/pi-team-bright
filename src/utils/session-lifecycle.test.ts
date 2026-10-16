@@ -88,7 +88,7 @@ describe("Pi session lifecycle", () => {
     vi.stubEnv("PI_AGENT_NAME", "worker");
     const writeRuntime = vi.spyOn(runtime, "writeRuntimeStatus");
     const bind = vi.spyOn(teams, "bindMemberSession");
-    const update = vi.spyOn(teams, "updateMembership");
+    const update = vi.spyOn(teams, "applyMembershipEvent");
     const event = vi.spyOn(teamEvents, "appendTeamEvent");
 
     const handlers = registeredHandlers();

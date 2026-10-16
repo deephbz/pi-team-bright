@@ -1,4 +1,5 @@
 import type { Member } from "../team-authority/contracts";
+import { parseMembership, type InvalidMembershipReason } from "../team-authority/membership-machine";
 
 /** The only persisted carrier shapes a current teammate Membership may represent. */
 export type WorkerCarrierState =
@@ -8,10 +9,7 @@ export type WorkerCarrierState =
   | { kind: "bound"; member: Member; membershipId: string; sessionFile: string }
   | { kind: "invalid"; member: Member; reason: WorkerCarrierInvalidReason };
 
-export type WorkerCarrierInvalidReason =
-  | "missing_membership_id"
-  | "both_session_and_pending_launch"
-  | "missing_session_and_pending_launch";
+export type WorkerCarrierInvalidReason = InvalidMembershipReason;
 
 /** Team-owned terminal adapter evidence for the recorded carrier target. */
 export type WorkerCarrierObservation = "live" | "missing" | {
@@ -44,23 +42,19 @@ export type WorkerEnsurePlan =
   };
 
 /**
- * Converts persistence optionals into the lifecycle state machine without
+ * Projects the Membership machine state onto the ensure planner without
  * changing the on-disk TeamConfig schema. An inactive or unmatched member is
  * represented by `undefined` at this boundary and normalizes to absent.
  */
 export function normalizeWorkerCarrier(member: Member | undefined): WorkerCarrierState {
   if (!member) return { kind: "absent" };
-  if (!member.membershipId) return { kind: "invalid", member, reason: "missing_membership_id" };
-  if (member.sessionFile && member.pendingLaunchId) {
-    return { kind: "invalid", member, reason: "both_session_and_pending_launch" };
+  const state = parseMembership(member);
+  switch (state.kind) {
+    case "inactive": return { kind: "absent" };
+    case "invalid": return { kind: "invalid", member, reason: state.reason };
+    case "bound": return { kind: "bound", member, membershipId: member.membershipId!, sessionFile: state.sessionFile };
+    case "prepared": return { kind: "prepared", member, membershipId: member.membershipId!, pendingLaunchId: state.capability };
   }
-  if (member.sessionFile) {
-    return { kind: "bound", member, membershipId: member.membershipId, sessionFile: member.sessionFile };
-  }
-  if (member.pendingLaunchId) {
-    return { kind: "prepared", member, membershipId: member.membershipId, pendingLaunchId: member.pendingLaunchId };
-  }
-  return { kind: "invalid", member, reason: "missing_session_and_pending_launch" };
 }
 
 /** Pure exhaustive Worker lifecycle decision; effects execute outside this module. */

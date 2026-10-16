@@ -11,6 +11,7 @@ import * as paths from "./paths";
 import { withLock } from "./lock";
 import { normalizeTeamPaneLayout, type TeamPaneLayout } from "./team-pane-layout";
 import { THINKING_LEVELS } from "../team-authority/contracts";
+import { applyMembershipPatch, parseMembership, transitionMembership, type CarrierLaunchKind, type MembershipEvent, type MembershipRefusal, type MembershipTransition, type StopAuthority } from "../team-authority/membership-machine";
 
 function malformedConfigError(configFile: string, detail: string): Error {
   return new Error(`Team config ${configFile} is malformed (${detail}); refusing to overwrite it. Restore the file or move it aside only after reviewing its contents.`);
@@ -756,28 +757,59 @@ export async function bindMemberSession(
         "refusing to bind a replacement Membership from a stale startup.",
       );
     }
-    if (member.sessionFile) {
-      if (launchId) throw new Error(`Launch capability for ${agentName} has already been consumed; resume by exact Session binding without a launch ID.`);
-      if (member.sessionFile !== sessionFile) {
-        throw new Error(`Session ${sessionFile} cannot replace current binding ${member.sessionFile} for ${agentName} on team ${teamName}.`);
-      }
-    } else {
-      if (!launchId || !member.pendingLaunchId || launchId !== member.pendingLaunchId) {
-        throw new Error(`A matching pending launch capability is required for the first Session binding of ${agentName} on team ${teamName}.`);
-      }
-      member.sessionFile = sessionFile;
-      member.pendingLaunchId = undefined;
-      member.launchConsumedAt = new Date(hostEnv().clock.now()).toISOString();
+    const placement = Object.keys(updates).length ? updates : undefined;
+    const step = transitionMembership(parseMembership(member), { type: "bind_session", sessionFile, launchId, at: hostEnv().clock.now(), placement });
+    if (step.kind === "refused") throw new Error(membershipRefusalMessage(step.reason, { teamName, member, sessionFile }));
+    if (step.kind === "unchanged") return structuredClone(member);
+    return commitMembershipStep(p, config, member, step);
+  });
+}
+
+/** Thrown when the Membership machine refuses an event. The record is unchanged. */
+export class MembershipTransitionRefused extends Error {
+  constructor(readonly reason: MembershipRefusal, message: string) { super(message); }
+}
+
+function membershipRefusalMessage(reason: MembershipRefusal, context: { teamName: string; member: Member; sessionFile?: string }): string {
+  const { teamName, member, sessionFile } = context;
+  switch (reason) {
+    case "launch_capability_consumed": return `Launch capability for ${member.name} has already been consumed; resume by exact Session binding without a launch ID.`;
+    case "session_conflict": return `Session ${sessionFile} cannot replace current binding ${member.sessionFile} for ${member.name} on team ${teamName}.`;
+    case "launch_capability_mismatch": return `A matching pending launch capability is required for the first Session binding of ${member.name} on team ${teamName}.`;
+    case "superseded_launch": return "Launch target belongs to a superseded launch. Inspect the orphan pane.";
+    case "launch_in_flight": return `Membership ${member.membershipId} of ${member.name} has a launch that may still start a process.`;
+    case "process_may_exist": return `Cannot stop ${member.name}: this Membership has no terminal binding and no exact Membership-bound runtime record proves the process exited. The Membership remains current.`;
+    case "invalid_membership": return `Current Membership for ${member.name} on team ${teamName} is invalid; stop the team and respawn it.`;
+    case "not_current": return `Membership ${member.membershipId} is not current in team ${teamName}.`;
+  }
+}
+
+function commitMembershipStep(p: string, config: TeamConfig, member: Member, step: Extract<MembershipTransition, { kind: "applied" }>): Promise<Member> {
+  if (step.patch.terminalTarget) {
+    assertTerminalTargetShape(step.patch.terminalTarget, "Membership terminal target");
+    if (!config.terminalBackend || step.patch.terminalTarget.backend !== config.terminalBackend) {
+      throw new Error(`Terminal target backend ${step.patch.terminalTarget.backend} does not match Team ${config.name} backend ${config.terminalBackend || "<missing>"}.`);
     }
-    if (updates.terminalTarget) {
-      assertTerminalTargetShape(updates.terminalTarget, "Membership terminal target");
-      if (!config.terminalBackend || updates.terminalTarget.backend !== config.terminalBackend) {
-        throw new Error(`Terminal target backend ${updates.terminalTarget.backend} does not match Team ${teamName} backend ${config.terminalBackend || "<missing>"}.`);
-      }
-    }
-    Object.assign(member, updates);
-    await writeJsonAtomicAsync(p, config);
-    return structuredClone(member);
+  }
+  const next = applyMembershipPatch(member, step.patch);
+  config.members[config.members.indexOf(member)] = next;
+  return writeJsonAtomicAsync(p, config).then(() => structuredClone(next));
+}
+
+/**
+ * The single writer of Membership lifecycle fields. Unchanged steps write
+ * nothing; refusals throw MembershipTransitionRefused and write nothing.
+ */
+export async function applyMembershipEvent(teamName: string, membershipId: string, event: MembershipEvent): Promise<{ member: Member; changed: boolean }> {
+  const p = configPath(teamName);
+  return withLock(p, async () => {
+    const config = readConfigRaw(p);
+    const member = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
+    if (!member) throw new MembershipTransitionRefused("not_current", `Membership ${membershipId} is not current in team ${teamName}.`);
+    const step = transitionMembership(parseMembership(member), event);
+    if (step.kind === "refused") throw new MembershipTransitionRefused(step.reason, membershipRefusalMessage(step.reason, { teamName, member }));
+    if (step.kind === "unchanged") return { member: structuredClone(member), changed: false };
+    return { member: await commitMembershipStep(p, config, member, step), changed: true };
   });
 }
 
@@ -848,23 +880,22 @@ export async function deactivateMember(
   });
 }
 
-/** Deactivate exactly one Membership generation; never resolve by reusable name. */
+/**
+ * Deactivate exactly one Membership generation; never resolve by reusable name.
+ * The caller names the evidence that authorizes the stop; the machine checks it.
+ */
 export async function deactivateMembership(
   teamName: string,
   membershipId: string,
   reason: NonNullable<Member["deactivationReason"]>,
+  authority: { authority: StopAuthority; carrier: CarrierLaunchKind } = { authority: "process_stopped", carrier: "two_stage" },
 ): Promise<Member | null> {
-  const p = configPath(teamName);
-  return withLock(p, async () => {
-    const config = readConfigRaw(p);
-    const member = config.members.find((candidate) => candidate.membershipId === membershipId && candidate.isActive !== false);
-    if (!member) return null;
-    member.isActive = false;
-    member.deactivatedAt = new Date(hostEnv().clock.now()).toISOString();
-    member.deactivationReason = reason;
-    await writeJsonAtomicAsync(p, config);
-    return structuredClone(member);
-  });
+  try {
+    return (await applyMembershipEvent(teamName, membershipId, { type: "deactivate", reason, at: hostEnv().clock.now(), ...authority })).member;
+  } catch (error) {
+    if (error instanceof MembershipTransitionRefused && error.reason === "not_current") return null;
+    throw error;
+  }
 }
 
 export async function deactivateCurrentMembers(

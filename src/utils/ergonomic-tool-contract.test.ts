@@ -780,10 +780,10 @@ describe("ergonomic agent-facing Team contracts", () => {
     });
     await teams.addMember(team, worker);
     await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
-    const updateMembership = teams.updateMembership;
-    vi.spyOn(teams, "updateMembership").mockImplementation((teamName, membershipId, patch) => patch.terminalTarget
+    const applyMembershipEvent = teams.applyMembershipEvent;
+    vi.spyOn(teams, "applyMembershipEvent").mockImplementation((teamName, membershipId, event) => event.type === "record_target" || (event.type === "complete_launch" && event.target)
       ? Promise.reject(new Error("simulated recovery target persistence failure"))
-      : updateMembership(teamName, membershipId, patch));
+      : applyMembershipEvent(teamName, membershipId, event));
     const resolved = vi.spyOn(workerResources, "resolveWorkerLaunchResources");
 
     const refused = await registerTools().get("ensure_worker")!.execute(
@@ -838,10 +838,10 @@ describe("ergonomic agent-facing Team contracts", () => {
     });
     await teams.addMember(team, worker);
     await runtime.writeRuntimeStatus(team, "worker", { pid: 2_147_483_647, startedAt: 1, osBirthToken: "old-birth", bootId: "fixture-boot" }, worker.membershipId);
-    const updateMembership = teams.updateMembership;
-    vi.spyOn(teams, "updateMembership").mockImplementation((teamName, membershipId, patch) => patch.terminalTarget
+    const applyMembershipEvent = teams.applyMembershipEvent;
+    vi.spyOn(teams, "applyMembershipEvent").mockImplementation((teamName, membershipId, event) => event.type === "record_target" || (event.type === "complete_launch" && event.target)
       ? Promise.reject(new Error("simulated recovery target persistence failure"))
-      : updateMembership(teamName, membershipId, patch));
+      : applyMembershipEvent(teamName, membershipId, event));
 
     const refused = await registerTools().get("ensure_worker")!.execute(
       "ensure-recovery-stop-unconfirmed",
@@ -881,7 +881,7 @@ describe("ergonomic agent-facing Team contracts", () => {
     const team = uniqueTeam("worker-prepared-retain-aggregate");
     const leadSession = `/tmp/${team}-lead.jsonl`;
     await createBoundTeam(team, leadSession);
-    vi.spyOn(teams, "updateMembership").mockRejectedValueOnce(new Error("injected persistence failure"));
+    vi.spyOn(teams, "applyMembershipEvent").mockRejectedValueOnce(new Error("injected persistence failure"));
 
     const refused = await registerTools().get("ensure_worker")!.execute(
       "ensure-prepared-stop-unconfirmed",

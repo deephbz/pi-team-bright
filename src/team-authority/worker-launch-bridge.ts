@@ -13,6 +13,7 @@ import { resolveWorkerModelRole, type ModelRoleSettings } from "../utils/model-r
 import { normalizeWorkerCarrier, planWorkerEnsure, type WorkerRecoveryMode } from "../utils/worker-ensure-lifecycle";
 import { memberTerminalTarget, terminalTarget } from "../utils/terminal-target";
 import { teamPanePlacement } from "../utils/team-pane-placement";
+import { carrierLaunchKind } from "../utils/terminal-adapter";
 import { currentTerminalForTeam } from "../utils/team-terminal";
 import type { SpawnOptions } from "../utils/terminal-adapter";
 import { withSemanticTrace } from "../utils/trace";
@@ -20,7 +21,6 @@ import type { TeamLifecyclePublication, WorkerStartupObservation } from "./team-
 import type { WorkerLaunchObservationState } from "../utils/receipt-types";
 
 export type PreparedLaunchTarget = { terminalId: string; isWindow: boolean; backend: string };
-export type PreparedLaunchReceipt = PreparedLaunchTarget & { initialMessage?: IdentifiedInboxMessage };
 export interface WorkerAggregate { path?: string; projectTrusted: boolean; modelRoleSettings?: ModelRoleSettings }
 export interface WorkerLaunchBridgeDependencies {
   buildWorkerArgv(model: string | undefined, thinking: Member["thinking"], aggregatePath: string | undefined, projectTrusted: boolean): string[];
@@ -134,9 +134,9 @@ export class WorkerLaunchBridge {
           ...(plan.reason === "legacy_unverified" && view.attention ? { message: view.attention.message } : {}) };
         if (plan.action === "refuse") throw new Error(`Invalid carrier: ${plan.reason}`);
         const launchId = teams.newLaunchId();
-        const updated = await teams.updateMembership(request.teamName, current.membershipId!, {
-          launch: { launchId, state: "requested", requestedAt: hostEnv().clock.now(), ...(status?.pid ? { priorGeneration: { pid: status.pid, osBirthToken: status.osBirthToken, bootId: status.bootId } } : {}) },
-          ...(!current.sessionFile ? { pendingLaunchId: launchId } : {}),
+        const { member: updated } = await teams.applyMembershipEvent(request.teamName, current.membershipId!, {
+          type: "relaunch", launchId, at: hostEnv().clock.now(), carrier: carrierLaunchKind(config.terminalBackend),
+          ...(status?.pid ? { prior: { pid: status.pid, osBirthToken: status.osBirthToken, bootId: status.bootId } } : {}),
         });
         return { member: updated, config, action: plan.action === "recover" ? "recovered" : "created", ...(plan.action === "recover" ? { recoveryMode: plan.recoveryMode } : {}), lastStop: view.lastStop };
       });
@@ -178,10 +178,8 @@ export class WorkerLaunchBridge {
       observePane(terminalId);
       assertLockDeadline();
       // This CAS records the target before Herdr starts the process.
-      await teams.withCurrentMembershipLease(request.teamName, member.membershipId!, async current => {
-        if (current.launch?.launchId !== launchId) throw new Error("Launch target belongs to a superseded launch. Inspect the orphan pane.");
-        await teams.updateMembership(request.teamName, member.membershipId!, { terminalTarget: terminalTarget(terminal.name, target!.isWindow ? "window" : "pane", terminalId) });
-      });
+      await teams.withCurrentMembershipLease(request.teamName, member.membershipId!, () => teams.applyMembershipEvent(request.teamName, member.membershipId!, {
+        type: "record_target", launchId, target: terminalTarget(terminal.name, target!.isWindow ? "window" : "pane", terminalId) }));
       assertLockDeadline();
       const completion = terminal.startPrepared(terminalId, options);
       void completion.then(result => this.completeLaunch(request.teamName, member.membershipId!, launchId, result))
@@ -196,18 +194,9 @@ export class WorkerLaunchBridge {
   }
   async completeLaunch(teamName: string, membershipId: string, launchId: string, result: { state: "started" | "refused" | "unknown"; fact: string }, target?: PreparedLaunchTarget): Promise<boolean> {
     // Receipt expiry may leave a prepared pane. Reconcile only the same launch, never start it.
-    return withLockDeadline(hostEnv().clock.now() + 60000, () => teams.withCurrentMembershipLease(teamName, membershipId, async current => {
-      if (current.launch?.launchId !== launchId) return false;
-      await teams.updateMembership(teamName, membershipId, { launch: { ...current.launch, ...result, observedAt: hostEnv().clock.now() },
-        ...(target ? { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) } : {}) });
-      return true;
-    }));
-  }
-  async launchPreparedMembership(teamName: string, prepared: Member, initialMessage: (() => Promise<IdentifiedInboxMessage>) | null, spawn: () => PreparedLaunchTarget | Promise<PreparedLaunchTarget>, _aggregatePath?: string): Promise<PreparedLaunchReceipt> {
-    const message = initialMessage ? await initialMessage() : undefined;
-    const target = await spawn();
-    await teams.updateMembership(teamName, prepared.membershipId!, { terminalTarget: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) });
-    return { ...target, ...(message ? { initialMessage: message } : {}) };
+    return withLockDeadline(hostEnv().clock.now() + 60000, () => teams.withCurrentMembershipLease(teamName, membershipId, async () => (await teams.applyMembershipEvent(teamName, membershipId, {
+      type: "complete_launch", launchId, result, at: hostEnv().clock.now(),
+      ...(target ? { target: terminalTarget(target.backend, target.isWindow ? "window" : "pane", target.terminalId) } : {}) })).changed));
   }
   observeLaunchedWorker(teamName: string, workerName: string, membershipId: string, afterCursor: string, signal?: AbortSignal, defaultTimeoutMs?: number): Promise<WorkerStartupObservation> {
     return this.dependencies.lifecyclePublication.observeWorkerStartup({ teamName, workerName, membershipId, afterCursor, signal, defaultTimeoutMs });

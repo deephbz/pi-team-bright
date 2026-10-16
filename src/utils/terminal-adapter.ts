@@ -232,3 +232,8 @@ export function powershellCommand(options: SpawnOptions): string {
   const argv = options.argv ? `& ${options.argv.map(powershellQuote).join(" ")}` : options.command!;
   return `${env ? `${env}; ` : ""}Set-Location -LiteralPath ${powershellQuote(options.cwd)}; ${argv}`;
 }
+
+/** Only Herdr records the target before it starts the process; other backends start it in prepare. */
+export function carrierLaunchKind(backend: string | undefined): import("../team-authority/membership-machine").CarrierLaunchKind {
+  return backend === "herdr" ? "two_stage" : "one_stage";
+}

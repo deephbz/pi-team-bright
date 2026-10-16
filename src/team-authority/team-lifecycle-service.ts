@@ -1,4 +1,6 @@
 import { hostEnv } from "../env/host-env";
+import type { StopAuthority } from "./membership-machine";
+import { carrierLaunchKind } from "../utils/terminal-adapter";
 import { readProcessGeneration } from "../env/async-process-generation";
 import * as paths from "../utils/paths";
 import * as runtime from "../utils/runtime";
@@ -117,16 +119,17 @@ export class TeamLifecycleService {
     });
   }
 
-  private async killTeammate(teamName: string, member: Member): Promise<void> {
+  /** Stops the carrier and returns the evidence that authorizes deactivation. */
+  private async killTeammate(teamName: string, member: Member): Promise<StopAuthority> {
     if (member.name === "team-lead") throw new Error("The team leader has no teammate terminal stop operation.");
     if (!member.membershipId) throw new Error(`Cannot stop ${member.name}: its current Membership has no stable identity.`);
     const status = await runtime.readRuntimeStatus(teamName, member.name);
     const observedGeneration = exactRuntimeGeneration(member, status);
-    if (status?.membershipId === member.membershipId && status.lastStop && ["new", "resume", "fork"].includes(status.lastStop.piReason)) return;
+    if (status?.membershipId === member.membershipId && status.lastStop && ["new", "resume", "fork"].includes(status.lastStop.piReason)) return "session_left";
     if (await exactBoundProcessAlreadyExited(observedGeneration)) {
       const deleted = await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration!);
       if (!deleted) throw new Error(`Cannot confirm shutdown of ${member.name}: its runtime process generation changed after exit evidence. The Membership remains current; inspect the resumed process and retry.`);
-      return;
+      return "process_stopped";
     }
     const teamConfig = await teams.readConfig(teamName);
     const teamTerminal = await terminalForTeam(teamConfig);
@@ -142,17 +145,20 @@ export class TeamLifecycleService {
       if (alive) throw new Error(`Cannot confirm shutdown of ${member.name}: ${teamTerminal.name} did not stop pane ${target.targetId}. The Membership remains current; close the process manually and retry.`);
     }
     if (observedGeneration) await runtime.deleteRuntimeStatus(teamName, member.name, observedGeneration);
+    return "process_stopped";
   }
 
   private async transitionCurrentMembership(teamName: string, member: Member, reason: NonNullable<Member["deactivationReason"]>, stopTerminal: boolean): Promise<{ member: Member | null }> {
     if (!member.membershipId) throw new Error(`Current Membership for ${member.name} on team ${teamName} has no membershipId.`);
     return teams.withCurrentMembershipLease(teamName, member.membershipId, async (current) => {
+      let authority: StopAuthority = "process_stopped";
       if (stopTerminal) {
         const status = await runtime.readRuntimeStatus(teamName, current.name);
         if (status?.membershipId === current.membershipId) await runtime.writeRuntimeStatus(teamName, current.name, { stopRequested: reason === "team_shutdown" ? "team_shutdown" : "worker_stop" }, current.membershipId);
-        await this.killTeammate(teamName, current);
+        authority = await this.killTeammate(teamName, current);
       }
-      return { member: await teams.deactivateMembership(teamName, member.membershipId!, reason) };
+      const config = await teams.readConfig(teamName);
+      return { member: await teams.deactivateMembership(teamName, member.membershipId!, reason, { authority, carrier: carrierLaunchKind(config.terminalBackend) }) };
     });
   }
 }

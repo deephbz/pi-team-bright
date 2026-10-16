@@ -2,6 +2,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { mockGenerations } from "../../test/process-fixture";
 import { nodeHostEnv } from "../env/host-env";
 import type { Member } from "./contracts";
+import type { MembershipEvent } from "./membership-machine";
 import * as runtime from "../utils/runtime";
 const fixture = vi.hoisted(() => ({ members: [] as Member[], separateWindows: false, mutations: [] as string[], leased: false, starts: 0, splits: 0, release: undefined as undefined | ((value: any) => void) }));
 vi.mock("../utils/lock", async importOriginal => ({ ...await importOriginal<any>(), withLock: async (_: unknown, fn: () => unknown) => fn() }));
@@ -14,7 +15,15 @@ vi.mock("../utils/teams", () => ({
     fixture.leased = true;
     try { return await fn(fixture.members.find(m => m.membershipId === id)!); } finally { fixture.leased = false; }
   },
-  updateMembership: async (_: unknown, id: string, updates: Partial<Member>) => { fixture.mutations.push("update"); return Object.assign(fixture.members.find(m => m.membershipId === id)!, updates); },
+  applyMembershipEvent: async (_: unknown, id: string, event: MembershipEvent) => {
+    fixture.mutations.push("update");
+    const { applyMembershipPatch, parseMembership, transitionMembership } = await import("./membership-machine.js");
+    const index = fixture.members.findIndex(m => m.membershipId === id);
+    const step = transitionMembership(parseMembership(fixture.members[index]!), event);
+    if (step.kind === "refused") throw new Error(step.reason);
+    if (step.kind === "applied") fixture.members[index] = applyMembershipPatch(fixture.members[index]!, step.patch);
+    return { member: fixture.members[index]!, changed: step.kind === "applied" };
+  },
 }));
 vi.mock("../utils/team-pane-placement", () => ({ teamPanePlacement: () => ({ leaderPaneId: "leader", workerPaneIds: [] }) }));
 vi.mock("../utils/team-terminal", async () => {

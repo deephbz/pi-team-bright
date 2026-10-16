@@ -103,7 +103,7 @@ export class TeamSessionLifecycleService {
       if (!membershipId) throw new Error(`Current lead Membership for ${input.teamName} has no stable identity.`);
       const startedAt = hostEnv().clock.now();
       await runtime.writeRuntimeStatus(input.teamName, "team-lead", { pid: hostEnv().process.pid, ...runtime.ownBirthIdentity(own), startedAt, lastStop: undefined, stopRequested: undefined }, membershipId);
-      if (admission.update) await teams.updateMembership(input.teamName, membershipId, admission.update);
+      if (admission.update) await teams.applyMembershipEvent(input.teamName, membershipId, { type: "relocate", placement: admission.update });
       const recordPath = paths.leadSessionPath(input.teamName);
       const dir = path.dirname(recordPath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
