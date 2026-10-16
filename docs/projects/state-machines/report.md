@@ -110,10 +110,30 @@ records hold private names.
 
 ### Gates
 
-- At `17562e1`, `npm test` passes: 179 files and 2,118 tests. Source:
-  `/tmp/ptb-sm/g17`.
-- Gates at `d645d46`: in progress, in `/tmp/ptb-sm/gates-d645d46.md`.
-- Edited exhaustive-lane files: 19 of 19 pass at `d645d46`.
+Gates at `d645d46` (`/tmp/ptb-sm/gates-d645d46.md`):
+
+| Gate | rc.4 | `d645d46` |
+| --- | --- | --- |
+| typecheck | pass | pass |
+| `npm test` | 2,109 tests pass | 2,148 tests pass |
+| campaign + v3.1 receipts | 4 pass | 4 pass |
+| test lanes | 208 / 184 / 24 | 212 / 188 / 24 |
+| exhaustive lane | not run | 1 failure: the tool-result QA suite |
+
+`adba806` fixes the QA failure. The QA suite now passes on sm and rc.4:
+- **Cause:** the QA fake terminal had no `prepareSpawn`. Every QA spawn
+  failed and reported `created`.
+- **Hidden dependency:** the suite's second Worker existed only as the
+  residue of a refused spawn.
+- **Remaining gap:** the full Team shutdown now runs for the first time in
+  this suite. It throws in the harness because the harness never sends
+  `session_start`. Production always sets that context. The QA
+  `team_create` case already fails on rc.4 for the same reason.
+
+Timing: `npm test` took 137 s on `d645d46` against 69 s at baseline. Task
+hydration p50 went from 0.1 ms to about 0.2 ms. Both runs shared the machine
+with another full lane, and the diff changes no Task-hydration code. A
+quiet-machine rerun is still due before merge.
 
 ## Cost
 
@@ -127,7 +147,7 @@ records hold private names.
 | Policy overrides outside the planner | 1 → 0 |
 
 The ensure reuse path makes no new calls. The preflight runs only on paths
-that write. Startup timing: in progress, in `/tmp/ptb-sm/gates-d645d46.md`.
+that write. Timing: see Gates.
 
 ## What the machine found that the incident did not show
 
@@ -138,7 +158,10 @@ that write. Startup timing: in progress, in `/tmp/ptb-sm/gates-d645d46.md`.
    forever. No tool could retry it.
 4. The bridge overrode the planner's decision after the planner returned it.
    It also hid invalid records as `launch_pending`.
-5. Target absence proves no process only with provenance: a refused launch,
+5. The tool-result QA suite had never launched a Worker since its fake
+   terminal lost `prepareSpawn`. Its partial-shutdown case depended on the
+   wedge residue (`adba806`).
+6. Target absence proves no process only with provenance: a refused launch,
    or a Herdr launch fence (`14d4694`). Legacy records stay fail-closed. The
    systems observer found this; the reducer made it a single predicate.
 
@@ -181,6 +204,6 @@ Re-applying a graph with changed goal text on finished Tasks reopens them as
 
 ## Decision requested
 
-Merge `sm-experiment` into main for rc.5 after the gates pass, with
+Merge `sm-experiment` into main for rc.5 after a quiet-machine timing rerun, with
 obligations 1 and 2 as rc.5 follow-ups. Evidence that would reverse this: a
 gate failure or a startup regression.
