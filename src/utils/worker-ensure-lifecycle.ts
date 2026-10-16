@@ -19,6 +19,8 @@ export type WorkerCarrierObservation = "live" | "missing" | {
   generation?: { osBirthToken?: string };
   evidence?: ReadonlyArray<{ source: string; fact: string }>;
   lastStop?: { piReason: "quit" | "reload" | "new" | "resume" | "fork" } | "none" | "quit" | "reload" | "new" | "resume" | "fork";
+  /** `outstanding`: a recorded launch may still bind. `expired_unstarted`: the Membership machine permits a first-binding retry. */
+  pending?: "outstanding" | "expired_unstarted";
 };
 
 export type WorkerEnsureAction = "create" | "reuse" | "recover" | "refuse" | "attention";
@@ -67,6 +69,22 @@ export function planWorkerEnsure(carrier: WorkerCarrierState, observation: Worke
     && evidence.evidence?.some(item => item.source === "process_generation" && item.fact === "generation_helper_missing")) {
     return attention(carrier, "generation_helper_missing", "ask_human");
   }
+  if (carrier.kind === "prepared" && evidence.pending === "expired_unstarted") return { action: "recover", carrier, recoveryMode: "first_binding_retry" };
+  const plan = planFromCarrier(carrier, evidence, lastStop, attention);
+  // Even a bound dead prior generation cannot bypass an in-flight recovery.
+  if (evidence.pending === "outstanding" && (carrier.kind === "prepared" || carrier.kind === "bound" || carrier.kind === "unbound")
+    && plan.action !== "reuse" && !(plan.action === "attention" && (plan.reason === "legacy_unverified" || plan.reason === "generation_helper_missing"))) {
+    return attention(carrier, "launch_pending");
+  }
+  return plan;
+}
+
+function planFromCarrier(
+  carrier: WorkerCarrierState,
+  evidence: Exclude<WorkerCarrierObservation, string>,
+  lastStop: string | undefined,
+  attention: (carrier: PreparedWorkerCarrier | BoundWorkerCarrier | UnboundWorkerCarrier, reason: string, nextActionHint?: "wait" | "ask_human") => WorkerEnsurePlan,
+): WorkerEnsurePlan {
   switch (carrier.kind) {
     case "absent":
       return { action: "create" };

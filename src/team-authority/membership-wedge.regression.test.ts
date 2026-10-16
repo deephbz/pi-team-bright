@@ -68,6 +68,22 @@ it("refuses a launch that failed before Herdr started Pi, then stops it and spaw
   expect((await teams.readConfig(f.name)).members.find(m => m.name === "worker")).toMatchObject({ isActive: false });
 });
 
+it("retries an expired unstarted Herdr launch and keeps a fresh one pending", async () => {
+  const requestedAt = Date.now() - 16000;
+  const f = await fixture([worker("worker", { pendingLaunchId: "L1", launch: { launchId: "L1", state: "requested", requestedAt } })]);
+  vi.spyOn(terminal, "prepareSpawn").mockResolvedValue("retry-pane");
+  vi.spyOn(terminal, "startPrepared").mockResolvedValue({ state: "started", fact: "carrier_start_accepted" });
+  const result = await f.bridge.ensureWorker(f.request("worker"));
+  expect(result).toMatchObject({ action: "recovered", recoveryMode: "first_binding_retry" });
+  const retried = await teams.currentMembership(f.name, "worker");
+  expect(retried.launch?.launchId).not.toBe("L1");
+  expect(retried.pendingLaunchId).toBe(retried.launch?.launchId);
+  expect(retried.terminalTarget?.targetId).toBe("retry-pane");
+
+  const g = await fixture([worker("worker", { pendingLaunchId: "L1", launch: { launchId: "L1", state: "requested", requestedAt: Date.now() } })]);
+  expect(await g.bridge.ensureWorker(g.request("worker"))).toMatchObject({ action: "attention", reason: "launch_pending", nextActionHint: "wait" });
+});
+
 it("keeps a pre-rc.1 target-less prepared record fail-closed", async () => {
   const f = await fixture([worker("worker", { pendingLaunchId: "L1" })]);
   expect(await f.lifecycle.stopWorker(f.name, "worker")).toMatchObject({ kind: "refused", reason: "stop_not_confirmed" });

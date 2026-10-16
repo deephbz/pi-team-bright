@@ -8,6 +8,7 @@ import { teamDir } from "../utils/paths";
 import { deriveCarrierView, herdrList, launchIsOutstanding, launchIsStalled, type CarrierView } from "../carrier-observation";
 import type { IdentifiedInboxMessage } from "../alert-authority/delivery-contracts";
 import type { Member, TeamConfig, TerminalTarget } from "./contracts";
+import { parseMembership, unstartedLaunchExpired } from "./membership-machine";
 import { removeWorkerAggregate, type QualifiedAvailableModelKeys } from "../utils/worker-resource-projection";
 import { resolveWorkerModelRole, type ModelRoleSettings } from "../utils/model-role-settings";
 import { normalizeWorkerCarrier, planWorkerEnsure, type WorkerRecoveryMode } from "../utils/worker-ensure-lifecycle";
@@ -125,11 +126,11 @@ export class WorkerLaunchBridge {
         const probe = status?.membershipId === current.membershipId && status?.pid
           ? await readProcessGeneration(status.pid) : { kind: "unknown" as const, reason: "runtime_missing" };
         assertLockDeadline();
-        const view = deriveCarrierView(current, status, hostEnv().clock.now(), probe);
-        const plan = planWorkerEnsure(normalizeWorkerCarrier(current), view);
-        // Even a bound dead prior generation cannot bypass an in-flight recovery.
-        const pending = launchIsOutstanding(current, status);
-        if (pending && plan.action !== "reuse" && !(plan.action === "attention" && ["legacy_unverified", "generation_helper_missing"].includes(plan.reason))) return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: "launch_pending", nextActionHint: "wait" };
+        const now = hostEnv().clock.now();
+        const view = deriveCarrierView(current, status, now, probe);
+        const pending = unstartedLaunchExpired(parseMembership(current), now, carrierLaunchKind(config.terminalBackend)) ? "expired_unstarted"
+          : launchIsOutstanding(current, status) ? "outstanding" : undefined;
+        const plan = planWorkerEnsure(normalizeWorkerCarrier(current), { ...view, ...(pending ? { pending } : {}) });
         if (plan.action === "reuse") return { action: "reused", member: current, membershipId: current.membershipId!, target: memberTerminalTarget(current, config.terminalBackend), lastStop: view.lastStop };
         if (plan.action === "attention") return { action: "attention", member: current, membershipId: current.membershipId!, launchId: view.launchId, launch: view.launch, lastStop: view.lastStop, reason: plan.reason, nextActionHint: plan.nextActionHint,
           ...(plan.reason === "legacy_unverified" && view.attention ? { message: view.attention.message } : {}) };
