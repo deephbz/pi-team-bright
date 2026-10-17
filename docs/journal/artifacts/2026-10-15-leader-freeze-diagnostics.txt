@@ -1,0 +1,11 @@
+{"syntheticStallMs":128.041774,"recoveryGapMs":424.2505950000001,"syntheticToolMs":400.40453900000006}
+✔ external watchdog observes a blocked JS loop, recovery, and payload-free input dispatch (937.212962ms)
+✔ flood is rate bounded, drops observable, files rotated, no more than two retained (1380.806782ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2412.4725
