@@ -1,8 +1,9 @@
 # Releasing
 
 A release is a version tag on `main`. Pushing the tag runs
-[`publish.yml`](../../.github/workflows/publish.yml): it tests the tagged
-source, publishes it to npm with provenance, and creates the GitHub Release.
+[`publish.yml`](../../.github/workflows/publish.yml): it requires the CI gate
+for the tagged tree (instant when `main` already passed it), verifies the
+package, publishes it to npm with provenance, and creates the GitHub Release.
 GitHub Releases are the release history; don't add a root changelog.
 
 1. Merge the change to `main` through a normal PR with green CI. In the same
