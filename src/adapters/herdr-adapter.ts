@@ -229,28 +229,29 @@ export class HerdrAdapter implements TerminalAdapter {
     }
     const leaderRect = this.rectFor(panes, leaderPaneId, true);
     if (!leaderRect) throw new Error(`Herdr leader pane ${leaderPaneId} has no usable geometry; refusing Worker spawn.`);
-    const candidates: Array<{ paneId: string; score: number; direction: "right" | "down" }> = [];
+    const candidates: Array<{ paneId: string; fallback: boolean; score: number; direction: "right" | "down" }> = [];
     for (const { paneId } of eligibleRegistered) {
       const rect = this.rectFor(panes, paneId);
       if (!rect || rect.x < leaderRect.x + leaderRect.width
         || rect.y < leaderRect.y || rect.y + rect.height > leaderRect.y + leaderRect.height) continue;
-      const horizontal = rect.width / columnsPerRow >= rect.height;
-      const splitSize = horizontal ? rect.width : rect.height;
-      const firstChild = Math.floor(splitSize / 2);
-      const secondChild = splitSize - firstChild;
-      const childWidth = horizontal ? firstChild : rect.width;
-      const childHeight = horizontal ? rect.height : firstChild;
-      const secondChildWidth = horizontal ? secondChild : rect.width;
-      const secondChildHeight = horizontal ? rect.height : secondChild;
-      if (childWidth < MIN_WORKER_PANE_WIDTH || secondChildWidth < MIN_WORKER_PANE_WIDTH
-        || childHeight < MIN_WORKER_PANE_HEIGHT || secondChildHeight < MIN_WORKER_PANE_HEIGHT) continue;
+      // Prefer the longer visual axis; fall back to the other axis when only it keeps both children viable.
+      const preferRight = rect.width / columnsPerRow >= rect.height;
+      const direction = ([preferRight ? "right" : "down", preferRight ? "down" : "right"] as const).find(axis => {
+        const splitSize = axis === "right" ? rect.width : rect.height;
+        const smallerChild = Math.floor(splitSize / 2);
+        return axis === "right"
+          ? smallerChild >= MIN_WORKER_PANE_WIDTH && rect.height >= MIN_WORKER_PANE_HEIGHT
+          : smallerChild >= MIN_WORKER_PANE_HEIGHT && rect.width >= MIN_WORKER_PANE_WIDTH;
+      });
+      if (!direction) continue;
       candidates.push({
         paneId,
+        fallback: direction !== (preferRight ? "right" : "down"),
         score: Math.max(rect.width / columnsPerRow, rect.height),
-        direction: horizontal ? "right" : "down",
+        direction,
       });
     }
-    candidates.sort((a, b) => b.score - a.score || (a.paneId < b.paneId ? -1 : a.paneId > b.paneId ? 1 : 0));
+    candidates.sort((a, b) => Number(a.fallback) - Number(b.fallback) || b.score - a.score || (a.paneId < b.paneId ? -1 : a.paneId > b.paneId ? 1 : 0));
     const selected = candidates[0];
     if (!selected) {
       throw new Error(`Insufficient Herdr pane geometry for another Worker: every registered Worker pane would create a child below ${MIN_WORKER_PANE_WIDTH}x${MIN_WORKER_PANE_HEIGHT}.`);

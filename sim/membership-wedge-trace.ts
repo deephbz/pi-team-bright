@@ -1,6 +1,6 @@
 import type { WorldTrace } from "./trace-format";
 
-/** Workers that fit the simulated pane before Herdr geometry refuses a spawn. */
+/** Workers that fit the simulated 24-column Worker region before Herdr geometry refuses a spawn. */
 export const WEDGE_FILLED = 16;
 
 /**
@@ -12,7 +12,7 @@ export function wedgeTrace(): WorldTrace {
   const call = (at: number, tool: string, args: Record<string, unknown>) => ({ at, step: { kind: "tool.call" as const, who: lead, tool, args } });
   const steps: WorldTrace["steps"] = [
     { at: 0, step: { kind: "pi.start", who: lead, session: "session-1", reason: "startup" } },
-    call(0, "team_create", { name: "team-1", purpose: "wedge replay", pane_layout: { leader_share: 0.8, worker_tiling: "adaptive" } }),
+    call(0, "team_create", { name: "team-1", purpose: "wedge replay", pane_layout: { leader_share: 0.9, worker_tiling: "adaptive" } }),
   ];
   for (let i = 1; i <= WEDGE_FILLED; i++) steps.push(call(i * 100, "ensure_worker", { name: `w${i}`, scope: "fill" }));
   steps.push(call(5000, "ensure_worker", { name: "refused-1", scope: "over capacity" }));

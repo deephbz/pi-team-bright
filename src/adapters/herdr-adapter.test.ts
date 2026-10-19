@@ -107,13 +107,23 @@ describe("HerdrAdapter async contract", () => {
   });
   it.each([
     [50, 20, 2, true, "right"], [50, 20, 3, true, "down"], [50, 50, 2, true, "down"],
-    [41, 11, 2, true, "right"], [39, 11, 2, false, "right"], [37, 19, 2, true, "down"],
+    [41, 11, 2, true, "right"], [39, 11, 2, true, "down"], [37, 19, 2, true, "down"],
     [20, 9, 3, false, "down"], [20, 11, 3, true, "down"], [39, 5, 2, false, "right"],
   ] as const)("checks axis and child minima for %sx%s with bias %s", async (width, height, columns_per_row, viable, direction) => {
     panes = [rect("leader", 60, 60, 0), rect("worker", width, height)];
     const prepare = adapter.prepareSpawn(options(["worker"], { ...adaptive, columns_per_row }));
     if (viable) { await prepare; expectSplit("worker", direction); }
     else { await expect(prepare).rejects.toThrow(/insufficient.*geometry/i); expect(splitCalls()).toEqual([]); }
+  });
+  it("falls back to the other axis when the longer axis is too narrow, as in the 2026-10-19 wedge", async () => {
+    // Every pane prefers a side-by-side split that leaves 12-13 columns; a downward split still fits 20x5.
+    panes = [rect("leader", 34, 25, 0), rect("w-a", 26, 13, 34, 0), rect("w-b", 26, 12, 34, 13),
+      rect("w-c", 25, 7, 60, 0), rect("w-d", 25, 6, 60, 7), rect("w-e", 25, 12, 60, 13)];
+    await adapter.prepareSpawn(options(["w-a", "w-b", "w-c", "w-d", "w-e"], adaptive)); expectSplit("w-a", "down");
+  });
+  it("prefers any pane that fits its longer axis over a higher-scoring fallback pane", async () => {
+    panes = [rect("leader", 60, 60, 0), rect("fallback", 44, 9, 60, 0), rect("preferred", 41, 8, 60, 10)];
+    await adapter.prepareSpawn(options(["fallback", "preferred"], { ...adaptive, columns_per_row: 5 })); expectSplit("preferred", "right");
   });
   it("enforces registered Worker capacity without splitting", async () => {
     await expect(adapter.prepareSpawn(options(["closed"], { ...adaptive, worker_limit: 1 }))).rejects.toThrow(/Worker limit 1/);
