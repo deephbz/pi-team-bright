@@ -27,7 +27,7 @@ private journal evidence to the artifact.
 
 ## Test lanes
 
-`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for external runtime diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for external runtime diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI runs it, `test:exhaustive-only`, typecheck, and package verification once per source tree as parallel shards (fast lane on Node 22/24, exhaustive on Node 24); a tree that already passed is skipped, so the release tag reuses main's result and publish only verifies and publishes the package.
 
 ## Task hydration benchmark
 

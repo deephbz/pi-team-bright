@@ -9,9 +9,19 @@ on:
 permissions:
   contents: write
   id-token: write
+  actions: read
 
 jobs:
+  # The full CI gate for the tagged tree. When the tagged commit already passed
+  # CI on main, every job finds its ci-verified record and skips in seconds.
+  ci:
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+      actions: read
+
   publish:
+    needs: ci
     runs-on: ubuntu-latest
     environment: npm
     steps:
@@ -29,9 +39,7 @@ jobs:
           case "$version" in *-*) dist_tag=next ;; *) dist_tag=latest ;; esac
           echo "NPM_DIST_TAG=$dist_tag" >> "$GITHUB_ENV"
       - run: npm ci
-      # Keep the same deterministic carrier surface as CI.
-      - run: TERM_PROGRAM=iTerm.app npm run test:full
-      - run: npm run test:lanes
+      # Tests ran in the `ci` job; verify the package this job publishes.
       - run: npm run verify:package
       - run: npm publish --access public --provenance --tag "$NPM_DIST_TAG"
       - name: Create GitHub Release

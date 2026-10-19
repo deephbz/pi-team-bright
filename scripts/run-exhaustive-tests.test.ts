@@ -5,7 +5,7 @@ import path from "node:path";
 import { spawn as spawnChild } from "node:child_process";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const { causalInventoryTitle, causalPath, createExhaustiveRunner, runExhaustiveTests } = require("./run-exhaustive-tests.cjs");
+const { campaignPath, causalInventoryTitle, causalPath, createExhaustiveRunner, planShard, runExhaustiveTests } = require("./run-exhaustive-tests.cjs");
 
 class Child extends EventEmitter {
   constructor(readonly pid = 4123) { super(); }
@@ -220,6 +220,30 @@ describe("exhaustive test runner", () => {
         try { process.kill(-groupPid, "SIGKILL"); } catch { /* group already reaped */ }
       }
       fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("sharded exhaustive lane", () => {
+  const files = ["a.test.ts", campaignPath, "b.test.ts", "c.test.ts", "sim/membership-conformance.test.ts"];
+
+  it("covers every file once and every campaign slice once across all shards", () => {
+    const units = [1, 2, 3].flatMap(index => planShard(files, { index, count: 3 }, 2).flat());
+    const whole = units.filter((unit: { file: string }) => unit.file !== campaignPath).map((unit: { file: string }) => unit.file).sort();
+    expect(whole).toEqual(files.filter(file => file !== campaignPath).sort());
+    const slices = units.filter((unit: { file: string }) => unit.file === campaignPath).map((unit: { env: { PI_SIM_CAMPAIGN_SHARD: string } }) => unit.env.PI_SIM_CAMPAIGN_SHARD);
+    expect(slices.length).toBeGreaterThan(0);
+    expect(slices.sort()).toEqual(Array.from({ length: slices.length }, (_, part) => `${part + 1}/${slices.length}`).sort());
+    for (const index of [1, 2, 3]) expect(planShard(files, { index, count: 3 }, 2).length).toBeLessThanOrEqual(2);
+  });
+
+  it("runs the causal lane only on the first shard, after its pool", async () => {
+    for (const index of [1, 2]) {
+      const order: string[] = [];
+      const runner = { runLanes: vi.fn(async () => { order.push("lanes"); }), runCausal: vi.fn(async () => { order.push("causal"); }), runNonCausal: vi.fn() };
+      await runExhaustiveTests("vitest.test.config.ts", runner, files, [causalInventoryTitle], { index, count: 2 }, 2);
+      expect(order).toEqual(index === 1 ? ["lanes", "causal"] : ["lanes"]);
+      expect(runner.runNonCausal).not.toHaveBeenCalled();
     }
   });
 });

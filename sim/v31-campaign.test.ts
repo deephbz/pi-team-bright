@@ -28,7 +28,15 @@ const seed = 20261014;
 // Capture the tested source before actors enter the guarded simulated world.
 const productionRevision = execFileSync("git", ["rev-parse", "HEAD"], { cwd: path.resolve(__dirname, ".."), encoding: "utf8" }).trim();
 const runs = Number(process.env.PI_SIM_CAMPAIGN_RUNS ?? 1000);
-const output = path.join(__dirname, "results", runs < 1000 ? "v31-smoke" : "v31");
+const scaleTeams = Number(process.env.PI_SIM_SCALE_TEAMS ?? (runs < 1000 ? 1 : 20));
+const scaleWorkers = Number(process.env.PI_SIM_SCALE_WORKERS ?? (runs < 1000 ? 2 : 50));
+// PI_SIM_CAMPAIGN_SHARD=k/N executes a deterministic, cost-balanced slice of the
+// campaign's independent runs; the union of all N slices is the unsharded campaign.
+const shardSpec = process.env.PI_SIM_CAMPAIGN_SHARD ?? "1/1";
+const shardMatch = /^([1-9]\d*)\/([1-9]\d*)$/.exec(shardSpec);
+if (!shardMatch || Number(shardMatch[1]) > Number(shardMatch[2])) throw new Error(`PI_SIM_CAMPAIGN_SHARD must be k/N with 1 <= k <= N, got ${shardSpec}`);
+const shard = { index: Number(shardMatch[1]), count: Number(shardMatch[2]) };
+const output = path.join(__dirname, "results", (runs < 1000 ? "v31-smoke" : "v31") + (shard.count > 1 ? `-shards/${shard.index}-of-${shard.count}` : ""));
 const write = (name: string, value: unknown) => { fs.mkdirSync(output, { recursive: true }); fs.writeFileSync(path.join(output, name), JSON.stringify(value, null, 2) + "\n"); };
 
 async function execute(trace: WorldTrace, seed: number, replay?: ReplayReceipt) {
@@ -45,6 +53,15 @@ async function execute(trace: WorldTrace, seed: number, replay?: ReplayReceipt) 
   } finally { world.dispose(); }
 }
 type Run = Awaited<ReturnType<typeof execute>>;
+/** Longest-processing-time assignment; every shard computes the same partition. Costs are relative CI seconds. */
+function ownedUnits(units: { key: string; cost: number }[]): Set<string> {
+  const loads = Array.from({ length: shard.count }, () => 0); const owned = new Set<string>();
+  for (const unit of [...units].sort((a, b) => b.cost - a.cost)) {
+    const target = loads.indexOf(Math.min(...loads)); loads[target] += unit.cost;
+    if (target === shard.index - 1) owned.add(unit.key);
+  }
+  return owned;
+}
 function temporalAssumption(run: Run, id: string): string {
   if (!["E1", "E2", "E3", "E4"].includes(id) || run.results[id]?.status !== "violation") return "not-needed";
   const result = run.results[id] as Extract<Verdict, { status: "violation" }>;
@@ -127,12 +144,22 @@ it("records v3.1 fixtures, baseline counterexamples, generated schedules and sca
       if (!prior || (prior.stopped && !run.stopped) || (temporalAssumption(prior, id) !== "fault-free-window" && temporalAssumption(run, id) === "fault-free-window")) representatives.set(id, run);
     }
   };
-  for (const file of fs.readdirSync(path.join(__dirname, "fixtures/traces")).filter(f => f.endsWith(".json")).sort()) {
+  const fixtures = fs.readdirSync(path.join(__dirname, "fixtures/traces")).filter(f => f.endsWith(".json")).sort();
+  const baselineIds = ["P4", "P5", "E5"];
+  const owned = ownedUnits([
+    ...[...fixtures.map(f => `fixture:${f}`), ...baselineIds.map(id => `baseline:${id}`), ...families.map((_, i) => `family:${i}`)].map(key => ({ key, cost: 2 })),
+    ...Array.from({ length: runs }, (_, i) => ({ key: `sample:${i}`, cost: 1 })),
+    ...Array.from({ length: scaleTeams }, (_, i) => ({ key: `scale:${i + 1}`, cost: 0.75 * scaleWorkers })),
+    { key: "shared", cost: 23 },
+  ]);
+  for (const file of fixtures) {
+    if (!owned.has(`fixture:${file}`)) continue;
     const trace = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures/traces", file), "utf8")) as WorldTrace;
     trace.setup.ptbVersion = "v3.1"; accept(await execute(trace, 42));
   }
   const baselineReceipts = [];
-  for (const id of ["P4", "P5", "E5"]) {
+  for (const id of baselineIds) {
+    if (!owned.has(`baseline:${id}`)) continue;
     const trace = JSON.parse(fs.readFileSync(path.join(__dirname, `results/baseline/${id}.trace.json`), "utf8")) as WorldTrace;
     const receipt = JSON.parse(fs.readFileSync(path.join(__dirname, `results/baseline/${id}.receipt.json`), "utf8")) as ReplayReceipt;
     let exact: string;
@@ -140,30 +167,32 @@ it("records v3.1 fixtures, baseline counterexamples, generated schedules and sca
     baselineReceipts.push({ property: id, runnerVersion: receipt.runnerVersion, outcome: exact });
     trace.setup.ptbVersion = "v3.1"; accept(await execute(trace, receipt.seed));
   }
-  for (let family = 0; family < families.length; family++) accept(await execute(generatedTrace({ family, seed: 42, gap: 0, repeats: 3 }, `v31-${families[family]}`), 42));
+  for (let family = 0; family < families.length; family++) if (owned.has(`family:${family}`)) accept(await execute(generatedTrace({ family, seed: 42, gap: 0, repeats: 3 }, `v31-${families[family]}`), 42));
   const samples: Sample[] = [];
   await fc.assert(fc.asyncProperty(fc.record({ family: fc.integer({ min: 0, max: families.length - 1 }), seed: fc.integer({ min: 0, max: 0x7fffffff }), gap: fc.integer({ min: 0, max: 200 }), repeats: fc.integer({ min: 2, max: 8 }) }), async sample => {
     const index = samples.length; samples.push(sample);
-    accept(await execute(generatedTrace(sample, `v31-generated-${index}`), sample.seed));
+    if (owned.has(`sample:${index}`)) accept(await execute(generatedTrace(sample, `v31-generated-${index}`), sample.seed));
     if ((index + 1) % 50 === 0) { console.info(`v31 campaign ${index + 1}/${runs}: ${((performance.now() - started) / 1000).toFixed(1)}s`); write("progress.json", { seed, samples, outcomes }); }
     return true;
   }), { seed, numRuns: runs, endOnFailure: true });
   const campaignMs = performance.now() - started;
-  const scaleTeams = Number(process.env.PI_SIM_SCALE_TEAMS ?? (runs < 1000 ? 1 : 20));
-  const scaleWorkers = Number(process.env.PI_SIM_SCALE_WORKERS ?? (runs < 1000 ? 2 : 50));
   for (let team = 1; team <= scaleTeams; team++) {
+    if (!owned.has(`scale:${team}`)) continue;
     const scale = await execute(scaleTrace(1, scaleWorkers, team), 42);
     accept(scale); write(`${scale.trace.id}.trace.json`, scale.trace); write(`${scale.trace.id}.receipt.json`, scale.receipt);
     console.info(`scale shard ${team}/${scaleTeams}: ${scale.stopped ?? "completed"}`);
   }
-  const shared = await execute(scaleTrace(3, 10), 42);
-  accept(shared); write(`${shared.trace.id}.trace.json`, shared.trace); write(`${shared.trace.id}.receipt.json`, shared.receipt);
+  if (owned.has("shared")) {
+    const shared = await execute(scaleTrace(3, 10), 42);
+    accept(shared); write(`${shared.trace.id}.trace.json`, shared.trace); write(`${shared.trace.id}.receipt.json`, shared.receipt);
+  }
   const minimized = [];
   for (const [id, original] of representatives) { console.info(`shrinking ${id} from ${original.trace.id}`); minimized.push(await minimize(original, id)); }
   const report = { schema: "ptb-sim-v31-campaign/1", source: "synthetic", productionRevision, runnerVersion: RUNNER_VERSION,
-    monitorIds: monitors.map(m => m.id), bounds, monitorOptions, temporalAssumptions: "E1-E4 require a fault-free 60000ms window after their trigger; generated schedules clear faults by15000ms and finish at100000ms. Verdicts from other windows need assumption review.", generated: { seed, runs, families, samples }, baselineReceipts,
+    monitorIds: monitors.map(m => m.id), bounds, monitorOptions, temporalAssumptions: "E1-E4 require a fault-free 60000ms window after their trigger; generated schedules clear faults by15000ms and finish at100000ms. Verdicts from other windows need assumption review.", generated: { seed, runs, families, samples }, ...(shard.count > 1 ? { shard: { ...shard, units: [...owned] } } : {}), baselineReceipts,
     scale: { isolatedTeams: scaleTeams, workersPerTeam: scaleWorkers, sharedWorld: { teams: 3, workersPerTeam: 10 }, gap: "20x50 shared-world scheduling remains untested" }, outcomes, minimized, timings: { campaignMs, totalIncludingShrinkAndScaleMs: performance.now() - started } };
   write("campaign.json", report); fs.rmSync(path.join(output, "progress.json"), { force: true });
   console.info(`v31 findings ${minimized.map(m => m.property).join(",")}; ${report.timings.totalIncludingShrinkAndScaleMs.toFixed(0)}ms`);
   expect(samples).toHaveLength(runs);
+  expect(outcomes).toHaveLength(owned.size);
 }, 3_600_000);

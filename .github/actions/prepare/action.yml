@@ -1,0 +1,33 @@
+name: Prepare
+description: >
+  Skip work when this exact source tree already passed CI; otherwise install
+  Node and restore node_modules keyed by the lockfile. Run after checkout.
+inputs:
+  node-version:
+    description: Node.js version
+    required: true
+outputs:
+  verified:
+    description: "'true' when a trusted CI run already verified this tree"
+    value: ${{ steps.verified.outputs.verified }}
+runs:
+  using: composite
+  steps:
+    - id: verified
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: .github/scripts/ci-verified.sh lookup
+    - if: steps.verified.outputs.verified != 'true'
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+    - if: steps.verified.outputs.verified != 'true'
+      id: modules
+      uses: actions/cache@v4
+      with:
+        path: node_modules
+        key: node-modules-${{ runner.os }}-node${{ inputs.node-version }}-${{ hashFiles('package-lock.json') }}
+    - if: steps.verified.outputs.verified != 'true' && steps.modules.outputs.cache-hit != 'true'
+      shell: bash
+      run: npm ci --no-audit --no-fund
