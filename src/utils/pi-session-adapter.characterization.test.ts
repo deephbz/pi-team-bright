@@ -2,6 +2,7 @@ import { writeJsonFixture } from "./test-write-json";
 import { terminalFixture } from "../../test/terminal-fixture";
 import fs from "node:fs";
 import path from "node:path";
+import { setTimeout as realSetTimeout } from "node:timers";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { CarrierObserver } from "../carrier-observation";
 import { readProcessGeneration } from "../env/async-process-generation";
@@ -31,6 +32,25 @@ import * as teamLabels from "./team-labels";
 const createdTeams: string[] = [];
 
 beforeAll(() => initTheme());
+
+/**
+ * Real filesystem I/O can complete after a fake-clock advance has returned and
+ * then arm a lock or retry back-off on the stopped clock. Let fake time follow
+ * real time in 1 ms steps only until `done` holds, so no later timer fires early.
+ */
+async function advanceUntil(done: () => boolean, label: string, maxMs = 3000): Promise<void> {
+  for (let advanced = 0; !done(); advanced++) {
+    if (advanced >= maxMs) throw new Error(`${label} did not happen within ${maxMs} fake ms`);
+    await new Promise<void>(resolve => realSetTimeout(resolve, 1));
+    await vi.advanceTimersByTimeAsync(1);
+  }
+}
+
+function settled(promise: Promise<unknown>): () => boolean {
+  let done = false;
+  promise.then(() => { done = true; }, () => { done = true; });
+  return () => done;
+}
 
 function teamName(suffix: string): string {
   const name = `pi-session-adapter-${suffix}-${process.pid}-${Date.now()}-${createdTeams.length}`;
@@ -229,6 +249,7 @@ describe("registered Pi Session adapter characterization", () => {
     const ctx = context(sessionFile), harness = extension();
     const startup = harness.get("session_start")!({ reason: "resume" }, ctx);
     await vi.advanceTimersByTimeAsync(1000);
+    await advanceUntil(settled(startup), "session start");
     await startup;
     expect(harness.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: DIRECT_MESSAGE_CUSTOM_TYPE, content: expect.stringContaining("Alert survives unsupported Task storage.") }), expect.objectContaining({ triggerTurn: true }));
     const state = (await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task;
@@ -240,6 +261,7 @@ describe("registered Pi Session adapter characterization", () => {
     expect(ctx.ui.notify.mock.calls.filter(([text]: [string]) => text.startsWith("Task delivery"))).toEqual([[`Task delivery stopped: ${UNSUPPORTED_BEADS_TEAM} It will not retry. Finish this Team with its original PTB version or start a new Team.`, "warning"]]);
     const shutdown = harness.get("session_shutdown")!({ reason: "quit" }, ctx);
     await vi.advanceTimersByTimeAsync(1_000);
+    await advanceUntil(settled(shutdown), "session shutdown");
     await shutdown;
   });
 
@@ -267,10 +289,12 @@ describe("registered Pi Session adapter characterization", () => {
     const ctx = context(sessionFile), harness = extension();
     const startup = harness.get("session_start")!({ reason: "resume" }, ctx);
     await vi.advanceTimersByTimeAsync(1000);
+    await advanceUntil(settled(startup), "session start");
     await startup;
     await vi.advanceTimersByTimeAsync(1000 + 2000 + 1_000);
     const notices = () => ctx.ui.notify.mock.calls.filter(([text]: [string]) => /^Task delivery (is degraded|recovered)/.test(text));
-    await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(3), { timeout: 1000, interval: 10 });
+    await advanceUntil(() => start.mock.calls.length >= 3, "third Task delivery start");
+    expect(start).toHaveBeenCalledTimes(3);
     expect(notices()).toEqual([["Task delivery is degraded: storage fault. Retry is scheduled.", "warning"]]);
     await vi.waitFor(() => expect(publish.mock.calls.filter(([, engine, state]) => engine === "task" && state.state === "degraded")).toHaveLength(3), { timeout: 1000, interval: 1 });
     await Promise.all(publish.mock.results.map(result => result.value));
@@ -279,7 +303,8 @@ describe("registered Pi Session adapter characterization", () => {
     expect((await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task).toEqual(failures[2][2]);
     if (recovery === "retry") await vi.advanceTimersByTimeAsync(4000);
     else await harness.get("session_start")!({ reason: "reload" }, ctx);
-    await vi.waitFor(() => expect(notices()).toHaveLength(2), { timeout: 1000, interval: 1 });
+    await advanceUntil(() => notices().length >= 2, "recovery notice");
+    expect(notices()).toHaveLength(2);
     await Promise.all(publish.mock.results.map(result => result.value));
     expect(notices()[1]).toEqual(["Task delivery recovered.", "info"]);
     expect((await runtime.readRuntimeStatus(name, "worker"))?.delivery?.engines.task?.state).toBe("running");
@@ -288,7 +313,8 @@ describe("registered Pi Session adapter characterization", () => {
     expect(notices()).toHaveLength(3);
     expect(notices()[2]).toEqual(["Task delivery is degraded: second fault. Retry is scheduled.", "warning"]);
     await vi.advanceTimersByTimeAsync(1000);
-    await vi.waitFor(() => expect(notices()).toHaveLength(4), { timeout: 1000, interval: 1 });
+    await advanceUntil(() => notices().length >= 4, "second recovery notice");
+    expect(notices()).toHaveLength(4);
     await Promise.all(publish.mock.results.map(result => result.value));
     expect(notices()[3]).toEqual(["Task delivery recovered.", "info"]);
     await harness.get("session_shutdown")!({ reason: "quit" }, ctx);
