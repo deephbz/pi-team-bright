@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Amp orb setup: install npm dependencies. Runs on fresh orbs and after
+# stale-snapshot restores, so it must be idempotent and fast when warm.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+step() { printf '\n==> %s\n' "$*"; }
+SECONDS=0
+
+step "toolchain: node $(node -v), npm $(npm -v)"
+command -v tmux >/dev/null || { step "installing tmux"; sudo apt-get update -qq && sudo apt-get install -y -qq tmux; }
+
+# npm ci always wipes node_modules (~15s). Skip it when the restored tree was
+# installed from the same lockfile with the same Node major.
+fingerprint="$(node -p 'process.versions.node.split(".")[0]')-$(sha256sum package-lock.json | cut -d' ' -f1)"
+marker=node_modules/.orb-setup-fingerprint
+if [ "$(cat "$marker" 2>/dev/null)" = "$fingerprint" ]; then
+  step "dependencies up to date"
+else
+  step "npm ci"
+  npm ci --no-audit --no-fund
+  echo "$fingerprint" > "$marker"
+fi
+
+if [ -f brand/package-lock.json ]; then
+  brand_fp="$(sha256sum brand/package-lock.json | cut -d' ' -f1)"
+  if [ "$(cat brand/node_modules/.orb-setup-fingerprint 2>/dev/null)" != "$brand_fp" ]; then
+    step "npm ci --prefix brand"
+    npm ci --prefix brand --no-audit --no-fund
+    echo "$brand_fp" > brand/node_modules/.orb-setup-fingerprint
+  fi
+fi
+
+step "done in ${SECONDS}s"
