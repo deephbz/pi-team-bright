@@ -30,9 +30,9 @@ try {
   if (fs.existsSync(path.join(installedRoot, "docs/examples/worker-model-profiles.settings.json"))) {
     throw new Error("package contains the superseded settings example");
   }
-  const probe = `const o=require('${packageName}/observation'); if(o.OBSERVATION_SCHEMA !== 'pi-teams-observation/1' || typeof o.readObservationSnapshot !== 'function') process.exit(1); o.readObservationSnapshot({teamsRoot: process.cwd()}).then(x => { if (!x.schema) process.exit(1); });`;
+  const probe = `const o=require('${packageName}/observation'); if(o.OBSERVATION_SCHEMA !== 'pi-teams-observation/1' || typeof o.readObservationSnapshot !== 'function' || typeof o.readTaskSnapshot !== 'function') process.exit(1); Promise.all([o.readObservationSnapshot({teamsRoot: process.cwd()}), o.readTaskSnapshot({teamsRoot: process.cwd(), teamName:'missing'})]).then(([members,tasks]) => { if (!members.schema || tasks.schema !== 'pi-team-tasks/1' || tasks.availability !== 'unavailable') process.exit(1); });`;
   execFileSync(process.execPath, ["-e", probe], { cwd: work, stdio: "inherit" });
-  fs.writeFileSync(path.join(work, "probe.ts"), `import { OBSERVATION_SCHEMA, readObservationSnapshot } from '${packageName}/observation'; void readObservationSnapshot; const schema: 'pi-teams-observation/1' = OBSERVATION_SCHEMA;\n`);
+  fs.writeFileSync(path.join(work, "probe.ts"), `import { OBSERVATION_SCHEMA, readObservationSnapshot, readTaskSnapshot, type TaskObservationSnapshot } from '${packageName}/observation'; void readObservationSnapshot; const schema: 'pi-teams-observation/1' = OBSERVATION_SCHEMA; const tasks: Promise<TaskObservationSnapshot> = readTaskSnapshot({teamName:'missing'});\n`);
   execFileSync(path.join(root, "node_modules", ".bin", "tsc"), ["--noEmit", "--module", "NodeNext", "--moduleResolution", "NodeNext", "--target", "ESNext", "probe.ts"], { cwd: work, stdio: "inherit" });
   console.log("packed observation and canonical settings example probes passed");
 } finally {

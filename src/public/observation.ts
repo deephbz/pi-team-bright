@@ -2,6 +2,8 @@ import { hostEnv } from "../env/host-env";
 import packageJson from "../../package.json";
 import { readMembershipObservation, type MembershipObservationDiagnosisCode, type MembershipObservationEvidence, type TeamObservationDiagnosisCode } from "../team-authority/membership-observation-reader";
 
+export { readTaskSnapshot, TASK_OBSERVATION_SCHEMA, type TaskObservation, type TaskObservationSnapshot, type ReadTaskOptions } from "./tasks";
+
 export const OBSERVATION_SCHEMA = "pi-teams-observation/1" as const;
 export const OBSERVATION_SCHEMA_VERSION = 1 as const;
 export const OBSERVATION_PRODUCER_VERSION = packageJson.version;

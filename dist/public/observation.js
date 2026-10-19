@@ -3,11 +3,14 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.observationJsonSchema = exports.OBSERVATION_PRODUCER_VERSION = exports.OBSERVATION_SCHEMA_VERSION = exports.OBSERVATION_SCHEMA = void 0;
+exports.observationJsonSchema = exports.OBSERVATION_PRODUCER_VERSION = exports.OBSERVATION_SCHEMA_VERSION = exports.OBSERVATION_SCHEMA = exports.TASK_OBSERVATION_SCHEMA = exports.readTaskSnapshot = void 0;
 exports.readObservationSnapshot = readObservationSnapshot;
 const host_env_1 = require("../env/host-env");
 const package_json_1 = __importDefault(require("../../package.json"));
 const membership_observation_reader_1 = require("../team-authority/membership-observation-reader");
+var tasks_1 = require("./tasks");
+Object.defineProperty(exports, "readTaskSnapshot", { enumerable: true, get: function () { return tasks_1.readTaskSnapshot; } });
+Object.defineProperty(exports, "TASK_OBSERVATION_SCHEMA", { enumerable: true, get: function () { return tasks_1.TASK_OBSERVATION_SCHEMA; } });
 exports.OBSERVATION_SCHEMA = "pi-teams-observation/1";
 exports.OBSERVATION_SCHEMA_VERSION = 1;
 exports.OBSERVATION_PRODUCER_VERSION = package_json_1.default.version;
