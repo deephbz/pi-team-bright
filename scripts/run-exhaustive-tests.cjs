@@ -8,6 +8,17 @@ const root = path.resolve(__dirname, "..");
 const causalPath = "src/utils/causal-path-characterization.test.ts";
 const causalTimeoutMs = 180_000;
 const causalInventoryTitle = "keeps the Task-to-observation path and its outside-in anchors machine-operable";
+const campaignPath = "sim/v31-campaign.test.ts";
+// Approximate seconds per file on a CI runner, including Vitest startup. They
+// only balance shards; correctness never depends on them.
+const defaultCostSeconds = 3;
+const costHintsSeconds = {
+  [campaignPath]: 560,
+  "sim/membership-conformance.test.ts": 24,
+  "sim/campaign.test.ts": 16,
+  "src/utils/formal-hardening-public-recovery.test.ts": 12,
+};
+const campaignStartupSeconds = 2;
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
@@ -42,7 +53,7 @@ function createExhaustiveRunner({
   clearTimer = clearTimeout,
   terminateGroup = terminateProcessGroup,
 } = {}) {
-  function run(config, args, timeoutMs) {
+  function run(config, args, timeoutMs, env) {
     return new Promise((resolve, reject) => {
       let child;
       let timer;
@@ -60,6 +71,7 @@ function createExhaustiveRunner({
       try {
         child = spawn(process.execPath, ["node_modules/vitest/vitest.mjs", "run", "--config", config, ...args], {
           cwd: root,
+          ...(env ? { env: { ...process.env, ...env } } : {}),
           detached: true,
           stdio: "inherit",
         });
@@ -94,6 +106,21 @@ function createExhaustiveRunner({
     async runNonCausal(config, files) {
       for (const file of files) await run(config, [file]);
     },
+    /** Lanes run concurrently; units inside a lane run in order, one Vitest process each. */
+    async runLanes(config, lanes) {
+      let failed = false;
+      await Promise.all(lanes.map(async (lane) => {
+        for (const unit of lane) {
+          if (failed) return;
+          try {
+            await run(config, [unit.file], undefined, unit.env);
+          } catch (error) {
+            failed = true;
+            throw new Error(`${unit.label}: ${errorMessage(error)}`);
+          }
+        }
+      }));
+    },
     async runCausal(config, cases = [causalInventoryTitle]) {
       if (cases.length === 0) throw new Error("causal lane has no active test targets");
       for (const title of cases) {
@@ -119,23 +146,85 @@ function createExhaustiveRunner({
   };
 }
 
+function parseShard(value) {
+  const match = /^([1-9]\d*)\/([1-9]\d*)$/.exec(value);
+  if (!match || Number(match[1]) > Number(match[2])) throw new Error(`--shard must be k/N with 1 <= k <= N, got ${value}`);
+  return { index: Number(match[1]), count: Number(match[2]) };
+}
+
+/**
+ * Deterministic partition of the exhaustive lane across `count` machines with
+ * `lanesPerShard` concurrent processes each. Whole files are packed into some
+ * lanes; the campaign splits into independent PI_SIM_CAMPAIGN_SHARD slices, one
+ * per remaining lane, choosing the split that minimizes the slowest lane.
+ * Every shard computes the same plan, and their union is the unsharded lane.
+ */
+function planShard(files, { index, count }, lanesPerShard) {
+  const laneCount = count * lanesPerShard;
+  const cost = (file) => costHintsSeconds[file] ?? defaultCostSeconds;
+  const whole = files.filter((file) => file !== campaignPath).map((file, order) => ({ file, label: file, cost: cost(file), order }))
+    .sort((a, b) => b.cost - a.cost || a.order - b.order);
+  const hasCampaign = files.includes(campaignPath);
+  const pack = (laneTotal) => {
+    const loads = Array.from({ length: laneTotal }, () => 0);
+    const lanes = loads.map(() => []);
+    for (const unit of whole) {
+      const target = loads.indexOf(Math.min(...loads));
+      loads[target] += unit.cost;
+      lanes[target].push(unit);
+    }
+    return { lanes, slowest: Math.max(0, ...loads) };
+  };
+  let best;
+  for (let fileLanes = hasCampaign ? 0 : laneCount; fileLanes <= laneCount; fileLanes++) {
+    const parts = hasCampaign ? laneCount - fileLanes : 0;
+    if (hasCampaign && parts === 0) break;
+    if (whole.length > 0 && fileLanes === 0) continue;
+    const packed = pack(fileLanes);
+    const slowest = Math.max(packed.slowest, parts ? cost(campaignPath) / parts + campaignStartupSeconds : 0);
+    if (!best || slowest < best.slowest) best = { ...packed, parts, slowest };
+  }
+  const campaignLanes = Array.from({ length: best.parts }, (_, part) => [{
+    file: campaignPath,
+    label: `${campaignPath} [campaign shard ${part + 1}/${best.parts}]`,
+    env: { PI_SIM_CAMPAIGN_SHARD: `${part + 1}/${best.parts}` },
+  }]);
+  return [...campaignLanes, ...best.lanes]
+    .slice((index - 1) * lanesPerShard, index * lanesPerShard)
+    .filter((lane) => lane.length > 0);
+}
+
 async function runExhaustiveTests(
   config,
   runner = createExhaustiveRunner(),
   files = nonCausalFiles(config),
   causalCases,
+  shard,
+  lanesPerShard = 4,
 ) {
-  await runner.runNonCausal(config, files);
-  await runner.runCausal(config, causalCases);
+  if (!shard) {
+    await runner.runNonCausal(config, files);
+    await runner.runCausal(config, causalCases);
+    return;
+  }
+  await runner.runLanes(config, planShard(files, shard, lanesPerShard));
+  // The causal lane keeps its own deadline and runs alone after the pool.
+  if (shard.index === 1) await runner.runCausal(config, causalCases);
 }
 
 if (require.main === module) {
-  const config = process.argv[2];
-  if (!config) throw new Error("usage: run-exhaustive-tests.cjs <vitest-config>");
-  runExhaustiveTests(config).catch((error) => {
+  const [config, ...flags] = process.argv.slice(2);
+  const shardFlag = flags.find((flag) => flag.startsWith("--shard="));
+  const lanesFlag = flags.find((flag) => flag.startsWith("--lanes="));
+  const lanes = lanesFlag ? Number(lanesFlag.slice("--lanes=".length)) : undefined;
+  if (!config || flags.some((flag) => flag !== shardFlag && flag !== lanesFlag) || (lanesFlag && !(Number.isInteger(lanes) && lanes > 0) || (lanesFlag && !shardFlag))) {
+    throw new Error("usage: run-exhaustive-tests.cjs <vitest-config> [--shard=k/N [--lanes=L]]");
+  }
+  // Every shard must use the same --lanes value: it is part of the partition.
+  runExhaustiveTests(config, undefined, undefined, undefined, shardFlag && parseShard(shardFlag.slice("--shard=".length)), lanes).catch((error) => {
     console.error(error.message);
     process.exitCode = 1;
   });
 }
 
-module.exports = { causalInventoryTitle, causalPath, causalTimeoutMs, createExhaustiveRunner, listTestFiles, nonCausalFiles, runExhaustiveTests, terminateProcessGroup };
+module.exports = { campaignPath, causalInventoryTitle, causalPath, causalTimeoutMs, createExhaustiveRunner, listTestFiles, nonCausalFiles, parseShard, planShard, runExhaustiveTests, terminateProcessGroup };

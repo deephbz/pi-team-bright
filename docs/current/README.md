@@ -600,9 +600,10 @@ restating executable definitions.
   2026-08-14 assessment](../journal/2026-08-14-worker-startup-final-assessment.md)
   own the evidence and limits.
 - `npm test` type-checks and runs the fast deterministic lane, not the full
-  contract/lifecycle/integration suite. CI on Node 22/24 runs it plus
-  `test:exhaustive-only` and package verification; publish on Node 24 runs
-  `test:full` and package verification. `npm run verify:package` installs the packed artifact in
+  contract/lifecycle/integration suite. CI runs it, `test:exhaustive-only`,
+  typecheck, and package verification once per source tree as parallel shards
+  (fast lane on Node 22/24, exhaustive on Node 24); publish reuses that result
+  for the tagged tree and only verifies the package. `npm run verify:package` installs the packed artifact in
   a clean temporary project and probes the scoped observation import in CommonJS
   and TypeScript.
 - `team_sync({view:"updates"})` returns `caught_up` for current quiescence and
@@ -752,4 +753,4 @@ Platform status:
 
 ## Test lanes
 
-`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for external runtime diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI on Node 22/24 runs fast plus the complement and package verification; publishing on Node 24 runs full plus package verification.
+`npm test` is fast and non-exhaustive; `test:exhaustive-only` is its CI complement, `test:full` runs everything, and `test:lanes` verifies closure. Use `test:external` for external runtime diagnostics, `qa:agent-surface` for the agent-surface artifact, and `qa:tool-results` for receipt QA. CI runs it, `test:exhaustive-only`, typecheck, and package verification once per source tree as parallel shards (fast lane on Node 22/24, exhaustive on Node 24); a tree that already passed is skipped, so the release tag reuses main's result and publish only verifies and publishes the package.
