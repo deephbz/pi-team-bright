@@ -254,9 +254,10 @@ signal contract and executable checks.
   preserves its exact current-Worker target and downward split. Herdr adaptive
   placement reads live rectangles, considers only registered Workers in the
   leader tab and Worker region, ranks candidates by `max(width / columns_per_row,
-  height)`, and splits the longer visual dimension at 50/50. It skips a candidate
-  when either child would be below 20 columns or 5 rows, then reports insufficient
-  geometry when no candidate remains. Ties use pane ID order. The legacy `grid`
+  height)`, and splits the longer visual dimension at 50/50. When either child
+  would be below 20 columns or 5 rows, it tries the other dimension. A pane that
+  fits its longer dimension ranks before a pane that fits only the other one.
+  It reports insufficient geometry when no candidate remains. Ties use pane ID order. The legacy `grid`
   value remains readable as an alias for adaptive placement; new layouts can use
   `adaptive` and need no fixed grid shape. An optional `worker_limit` caps current registered Worker
   Memberships; omitted preserves the historical unlimited behavior. Every target
