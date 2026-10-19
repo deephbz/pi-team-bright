@@ -84,7 +84,9 @@ exhaustive parameter reference.
 - [`@hypercarrier/pi-team-bright/observation`](../src/public/observation.ts) exports the one
   read-only `pi-teams-observation/1` projector, canonical types, and JSON
   Schema; its authority and privacy boundary are enforced by that executable
-  contract.
+  contract. The same entry point exports `readTaskSnapshot` from
+  [`tasks.ts`](../src/public/tasks.ts): read-only cards, dependencies, and the
+  authoritative ready frontier, without runtime or delivery effects.
 - [`src/utils/teams.ts`](../src/utils/teams.ts) owns Team configuration and
   current Membership generations.
 - [`src/utils/automatic-summary-policy.ts`](../src/utils/automatic-summary-policy.ts)

@@ -204,6 +204,12 @@ without complete timing show `timing unavailable`. In Timeline, `+` and `-`
 zoom time, arrows pan, and Home restores the full time span. Neither view schedules or
 changes a Task.
 
+External read-only consumers import `readObservationSnapshot` (Memberships)
+and `readTaskSnapshot` (Task cards and the authoritative ready frontier) from
+`@hypercarrier/pi-team-bright/observation`. The Task reader is independent
+of panes and processes; unavailable authority is not an empty graph.
+Types and implementation: [`src/public/tasks.ts`](src/public/tasks.ts).
+
 ## Team identity labels and HUD
 
 New Teams use a local `YYYYMMDD-` date prefix unless the name already has one.
