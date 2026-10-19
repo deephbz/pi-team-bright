@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Amp orb resume: nothing to reconnect; verify dependencies survived.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+[ -x node_modules/.bin/vitest ] || echo "node_modules missing; run .agents/setup" >&2

@@ -23,3 +23,7 @@ brand/promo-video/assets/
 
 # Brand website build output
 _site/
+
+# Amp orb portals
+.amp/portals/*
+sim/results/*-shards/
