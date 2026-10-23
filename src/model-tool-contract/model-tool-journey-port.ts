@@ -38,7 +38,7 @@ export interface ModelToolTaskApplicationPort {
 }
 
 export interface ModelToolAlertApplicationPort {
-  sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult>;
+  sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef; interrupt?: boolean }): Promise<AlertSendPortResult>;
 }
 
 export interface ModelToolCoordinationApplicationPort {

@@ -110,7 +110,7 @@ export class InMemoryTaskApplicationPort implements ModelToolTaskApplicationPort
 export class InMemoryAlertApplicationPort implements ModelToolAlertApplicationPort {
   constructor(private readonly state: InMemoryAlertState, private readonly teams: InMemoryTeamQuery, private readonly publication: InMemoryCoordinationPublication, private readonly revision: InMemorySupportRevision) {}
   readAcceptedDeliveries() { return this.state.deliveries.map(delivery => ({ ...delivery, recipients: [...delivery.recipients] })); }
-  async sendAlert(session: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult> {
+  async sendAlert(session: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef; interrupt?: boolean }): Promise<AlertSendPortResult> {
     const team = this.teams.active(session); if (!team) return { kind: "unavailable", reason: "no_active_team", message: "The exact leader Session is not bound to an active Team." };
     if (input.target.kind === "team" && input.kind !== "announcement") return { kind: "refused", reason: "invalid_fanout", message: "Only announcement Alerts may target the whole Team." };
     const acceptedRecipients = (input.target.kind === "team" ? [...team.workers.keys()] : [input.target.name]).filter(name => team.workers.has(name));

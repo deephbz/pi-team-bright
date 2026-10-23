@@ -46,6 +46,9 @@ function validateAlert(input: SendAlertInput): void {
   if (input.kind === "announcement" && input.to !== "*") {
     throw new Error("Announcement Alerts must target the whole Team with to: '*'.");
   }
+  if (input.interrupt === true && input.from !== "team-lead") {
+    throw new Error("Only team-lead may send an interrupting Alert.");
+  }
 }
 
 function assertTaskVersionRef(value: string): TaskVersionRef {
@@ -137,6 +140,11 @@ export async function readRecentReceivedAlerts(teamName: string, memberName: str
   };
 }
 
+/** Default Alerts keep the exact pre-interrupt delivery call; only interrupts add options. */
+function deliveryOptions(input: SendAlertInput): [] | [inboxDelivery.MessageDeliveryOptions] {
+  return input.interrupt === true ? [{ interrupt: true }] : [];
+}
+
 function deliverySummary(kind: AlertKind, taskRef: AlertTaskReference | undefined): string {
   return taskRef ? `${kind} for Task ${taskRef.taskId}` : `${kind} Alert`;
 }
@@ -176,6 +184,7 @@ export async function sendAlert(
       undefined,
       input.expectedSender,
       membership,
+      ...deliveryOptions(input),
     );
     accepted = result.accepted;
     failures = result.failures;
@@ -189,6 +198,7 @@ export async function sendAlert(
       undefined,
       input.expectedSender,
       membership,
+      ...deliveryOptions(input),
     );
     accepted = [{ recipient: input.to, messageId: message.id, ...(message.deliveryDegraded?.length ? { deliveryDegraded: message.deliveryDegraded } : {}) }];
     failures = [];

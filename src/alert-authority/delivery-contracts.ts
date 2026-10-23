@@ -11,6 +11,8 @@ export interface InboxMessage {
   read: boolean;
   summary?: string;
   color?: string;
+  /** Leader interrupt intent. Stored only when true; absent on older records means false. */
+  interrupt?: true;
 }
 
 /** An inbox Message after the storage boundary has assigned or migrated its ID. */

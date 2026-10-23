@@ -9,7 +9,7 @@ import * as path from "node:path";
 import * as paths from "../src/utils/paths";
 import * as runtime from "../src/utils/runtime";
 import * as teams from "../src/utils/teams";
-import { DirectMessageDelivery, messagePollMs } from "../src/alert-authority/direct-delivery";
+import { DirectMessageDelivery, interruptInFlightOperation, messagePollMs } from "../src/alert-authority/direct-delivery";
 import type { AlertMembershipPort } from "../src/alert-authority/contracts";
 import { TaskChangeDelivery, taskPollMs, type TaskDeliveryMembershipPort } from "../src/utils/task-delivery";
 import { RecipientDeliveryLifecycle, type RecipientDeliveryBinding, type DeliveryEngineName } from "../src/utils/recipient-delivery-lifecycle";
@@ -45,6 +45,9 @@ export interface PiTeamSessionAdapter {
   readonly resolveCurrentWorkerContext: (ctx: any) => Promise<{ teamName: string; member: PiSessionCurrentWorkerMember }>;
   register(): void;
 }
+
+/** Upper bound on waiting for an aborted run to settle before presenting an interrupting Alert. */
+const INTERRUPT_SETTLE_TIMEOUT_MS = 10_000;
 
 export function createPiTeamSessionAdapter(options: {
   pi: ExtensionAPI;
@@ -82,6 +85,15 @@ export function createPiTeamSessionAdapter(options: {
   let leaderRunSettled = false;
   let leaderContext: any;
   let deliveryContext: any;
+  // Interrupting Alerts wait here for the aborted run to settle. The bound
+  // keeps delivery live if a settle never arrives; it then steers as before.
+  const agentSettledWaiters = new Set<() => void>();
+  const waitForAgentSettled = (): Promise<void> => new Promise((resolve) => {
+    const done = () => { agentSettledWaiters.delete(done); hostEnv().clock.clearTimeout(timer); resolve(); };
+    const timer = hostEnv().clock.setTimeout(done, INTERRUPT_SETTLE_TIMEOUT_MS);
+    if ("unref" in timer) timer.unref();
+    agentSettledWaiters.add(done);
+  });
   let holdWarningContext: any;
   const recipientDeliveries: RecipientDeliveryLifecycle = new RecipientDeliveryLifecycle({
     makePair: (binding, failed) => createDeliveryPair(binding, deliveryContext, failed),
@@ -608,6 +620,12 @@ function createDeliveryPair(binding: RecipientDeliveryBinding, ctx: any, failed:
     pollMs: messagePollMs(),
     membership: alertMembership,
     onError: error => failed("alert", error),
+    dependencies: {
+      interrupt: async () => {
+        if (typeof ctx.isIdle !== "function" || typeof ctx.abort !== "function") return;
+        await interruptInFlightOperation(ctx, waitForAgentSettled);
+      },
+    },
   });
   const task = new TaskChangeDelivery(messageSink, {
     teamName: binding.teamName, recipient: binding.recipient, membershipId: binding.membershipId, sessionFile: binding.sessionFile,
@@ -911,6 +929,7 @@ pi.on("agent_start", async (_event, ctx) => {
 });
 
 pi.on("agent_settled", async (_event, ctx) => {
+  for (const done of [...agentSettledWaiters]) done();
   if (isTeammate && teamName) {
     await writeCurrentTeammateRuntime(ctx, { runState: "settled", lastHeartbeatAt: hostEnv().clock.now() });
   } else {

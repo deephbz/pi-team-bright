@@ -67,6 +67,23 @@ describe("Alert acceptance receipts", () => {
     expect(inbox[0]).not.toHaveProperty("deliveryDegraded");
   });
 
+  it("stores leader interrupt intent only when requested", async () => {
+    await executor().alertSend("lead" as never, { to: "worker", kind: "attention", text: "Default." });
+    await executor().alertSend("lead" as never, { to: "worker", kind: "attention", text: "Explicit false.", interrupt: false });
+    await executor().alertSend("lead" as never, { to: "worker", kind: "attention", text: "Stop now.", interrupt: true });
+    const inbox = await readInboxForMembership(team, "worker", binding.membershipId, false, false);
+    expect(inbox).toHaveLength(3);
+    expect(inbox[0]).not.toHaveProperty("interrupt");
+    expect(inbox[1]).not.toHaveProperty("interrupt");
+    expect(inbox[2].interrupt).toBe(true);
+  });
+
+  it("refuses an interrupting Alert from a Worker before any delivery", async () => {
+    await expect(sender.sendAlert({ teamName: team, from: "worker", to: "team-lead", kind: "attention", text: "Stop.", interrupt: true }))
+      .rejects.toThrow(/Only team-lead may send an interrupting Alert/);
+    expect(await readInboxForMembership(team, "worker", binding.membershipId, false, false)).toEqual([]);
+  });
+
   it("includes diagnostic evidence in broadcast receipts", async () => {
     await degrade("alert");
     const result = await sender.sendAlert({ teamName: team, from: "team-lead", to: "*", kind: "announcement", text: "Inspect delivery." });

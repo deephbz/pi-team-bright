@@ -403,6 +403,7 @@ export function createModelToolJourneyExecutors(port: ModelToolJourneyPort): Mod
         text: parameters.text,
         taskId: parameters.task_id,
         taskVersion: parameters.task_version as TaskVersionRef,
+        ...(parameters.interrupt === true ? { interrupt: true } : {}),
       });
       if (outcome.kind === "sent") return {
         kind: "alert_sent",

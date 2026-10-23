@@ -10,6 +10,7 @@ import {
   DirectMessageDelivery,
   messagePollMs,
   acknowledgedMessageIdsFromEntries,
+  interruptInFlightOperation,
 } from "../alert-authority/direct-delivery";
 
 const MEMBERSHIP_ID = "membership_worker_current";
@@ -534,5 +535,69 @@ describe("DirectMessageDelivery", () => {
     current = true;
     await delivery.scan();
     expect(readUnread).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("interrupting Alert delivery", () => {
+  function interruptHarness(unread: IdentifiedInboxMessage[], session: { isIdle(): boolean }) {
+    const order: string[] = [];
+    let settle!: () => void;
+    const abort = vi.fn(() => { order.push("abort"); settle(); });
+    const waitForSettled = vi.fn(() => new Promise<void>(resolve => {
+      settle = () => { order.push("settled"); resolve(); };
+    }));
+    const sink = { sendMessage: vi.fn(() => { order.push("steer"); }), appendEntry: vi.fn() };
+    const delivery = new DirectMessageDelivery(sink, {
+      teamName: "alpha",
+      recipient: "worker",
+      membershipId: MEMBERSHIP_ID,
+      sessionFile: SESSION_FILE,
+      pollMs: 60_000,
+      membership: alertMembership,
+      dependencies: {
+        readUnread: vi.fn(async () => unread),
+        markRead: vi.fn(async () => 0),
+        isCurrentBinding: vi.fn(async () => true),
+        watch: vi.fn(() => () => undefined),
+        interrupt: async () => { await interruptInFlightOperation({ isIdle: session.isIdle, abort }, waitForSettled); },
+      },
+    });
+    return { delivery, sink, abort, waitForSettled, order };
+  }
+
+  it("aborts an in-flight recipient once, waits for settle, then steers the whole batch", async () => {
+    const normal = inboxMessage("message_normal", "normal body");
+    const urgent = { ...inboxMessage("message_urgent", "urgent body"), interrupt: true as const };
+    const { delivery, sink, abort, order } = interruptHarness([normal, urgent], { isIdle: () => false });
+    await delivery.start([]);
+    expect(abort).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(["abort", "settled", "steer"]);
+    expect(sink.sendMessage).toHaveBeenCalledTimes(1);
+    const [message, options] = (sink.sendMessage.mock.calls as unknown as Array<[any, any]>)[0];
+    expect(options).toEqual({ triggerTurn: true, deliverAs: "steer" });
+    expect(message.details.messageIds).toEqual(["message_normal", "message_urgent"]);
+    delivery.stop();
+  });
+
+  it("presents an interrupt Alert to an idle recipient without aborting", async () => {
+    const urgent = { ...inboxMessage("message_urgent", "urgent body"), interrupt: true as const };
+    const { delivery, sink, abort, waitForSettled } = interruptHarness([urgent], { isIdle: () => true });
+    await delivery.start([]);
+    expect(abort).not.toHaveBeenCalled();
+    expect(waitForSettled).not.toHaveBeenCalled();
+    expect(sink.sendMessage).toHaveBeenCalledTimes(1);
+    delivery.stop();
+  });
+
+  it("never aborts for default or legacy records without the interrupt field", async () => {
+    // Older on-disk records predate the field; absence means false.
+    const legacy = JSON.parse(JSON.stringify(inboxMessage("message_legacy", "legacy body"))) as IdentifiedInboxMessage;
+    expect(legacy).not.toHaveProperty("interrupt");
+    const { delivery, sink, abort, waitForSettled } = interruptHarness([legacy], { isIdle: () => false });
+    await delivery.start([]);
+    expect(abort).not.toHaveBeenCalled();
+    expect(waitForSettled).not.toHaveBeenCalled();
+    expect(sink.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ customType: DIRECT_MESSAGE_CUSTOM_TYPE }), { triggerTurn: true, deliverAs: "steer" });
+    delivery.stop();
   });
 });

@@ -149,7 +149,7 @@ export interface ModelToolTeamPort {
   updateTasks(leaderSessionId: ExactLeaderSessionId, updates: ModelToolGraphTaskUpdateInput[], actor?: string): Promise<UpdateTasksPortResult>;
   stopWorker(leaderSessionId: ExactLeaderSessionId, worker: string): Promise<WorkerStopPortResult>;
   shutdownTeam(leaderSessionId: ExactLeaderSessionId): Promise<TeamShutdownPortResult>;
-  sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef }): Promise<AlertSendPortResult>;
+  sendAlert(leaderSessionId: ExactLeaderSessionId, input: { target: AlertTarget; kind: "clarification" | "attention" | "announcement"; text: string; taskId?: string; taskVersion?: TaskVersionRef; interrupt?: boolean }): Promise<AlertSendPortResult>;
   readTeamSync(leaderSessionId: ExactLeaderSessionId, view: "snapshot" | "updates", signal: AbortSignal, toolCallId: string): Promise<TeamSyncPortResult>;
   setPendingObservationResult(leaderSessionId: ExactLeaderSessionId, result: unknown): void;
   setBranchContext(leaderSessionId: ExactLeaderSessionId, branchIds: string[]): void;

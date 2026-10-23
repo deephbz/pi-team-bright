@@ -40,6 +40,36 @@ interface DeliveryDependencies {
   markRead: (ids: Iterable<string>) => Promise<number>;
   isCurrentBinding: () => Promise<boolean>;
   watch: (onHint: () => void) => () => void;
+  /**
+   * Abort the recipient's in-flight operation and resolve once a new turn can
+   * start. Called only for a batch that holds an interrupt record.
+   */
+  interrupt: () => Promise<void>;
+}
+
+/** The Pi ExtensionContext subset needed to interrupt a recipient Session. */
+export interface InterruptibleSession {
+  isIdle(): boolean;
+  abort(): void;
+}
+
+/**
+ * Abort an in-flight Pi operation, then wait until that run settles.
+ *
+ * A steer queued while Pi unwinds an aborted tool call is drained into the
+ * aborted run, which then stops without another turn. Presenting after the
+ * settle makes the Alert start a new turn instead. An idle Session is left
+ * alone, so the Alert behaves like a normal one.
+ */
+export async function interruptInFlightOperation(
+  session: InterruptibleSession,
+  waitForSettled: () => Promise<void>,
+): Promise<boolean> {
+  if (session.isIdle()) return false;
+  const settled = waitForSettled();
+  session.abort();
+  await settled;
+  return true;
 }
 
 export interface DirectMessageDeliveryOptions {
@@ -262,6 +292,7 @@ export class DirectMessageDelivery {
         })),
       watch: options.dependencies?.watch
         ?? ((onHint) => watchInboxFile(this.teamName, this.recipient, onHint)),
+      interrupt: options.dependencies?.interrupt ?? (async () => {}),
     };
   }
 
@@ -431,6 +462,16 @@ export class DirectMessageDelivery {
 
     const messageIds = pending.map((message) => message.id);
     for (const id of messageIds) this.attempted.add(id);
+    // One interrupt record interrupts once; the whole batch is then presented
+    // together in inbox order. Absent `interrupt` (older records) means false.
+    if (pending.some((message) => message.interrupt === true)) {
+      try {
+        await this.dependencies.interrupt();
+      } catch {
+        // Interrupt is best effort. The Alert is still presented as a steer.
+      }
+      if (!this.isCurrent(generation)) return;
+    }
     try {
       this.sink.sendMessage({
         customType: DIRECT_MESSAGE_CUSTOM_TYPE,

@@ -119,7 +119,7 @@ function toolSignature(name: string): string {
   if (name === "worker_stop") return "worker_stop({ worker })";
   if (name === "team_shutdown") return "team_shutdown({ })";
   if (name === "task_link") return "task_link({ task_id, relation, target_id, action, expected_version })";
-  if (name === "alert_send") return "alert_send({ to, kind, text, task_id, task_version })";
+  if (name === "alert_send") return "alert_send({ to, kind, text, task_id, task_version, interrupt? })";
   return "ensure_worker({ name, scope })";
 }
 
