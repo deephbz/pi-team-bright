@@ -1,0 +1,12 @@
+{"event":"watchdog_start","pid":16,"thresholdMs":500,"observedAt":1792072105000}
+{"event":"preload_start","at":1792072104970,"monoMs":28.454364,"pid":16,"dropped":0,"intervalMs":100,"observedAt":1792072105000}
+{"event":"heartbeat_stall","gapMs":501.282446,"observedAt":1792072105501}
+{"event":"heartbeat_recovered","gapMs":729.0939109999999,"observedAt":1792072105729}
+{"event":"heartbeat","at":1792072105728,"monoMs":786.688253,"pid":16,"dropped":0,"observedAt":1792072105729}
+{"event":"heartbeat_stall","gapMs":574.525158,"observedAt":1792072106303}
+{"event":"heartbeat_recovered","gapMs":3970.1835180000003,"observedAt":1792072109699}
+{"event":"heartbeat","at":1792072109699,"monoMs":4756.941933,"pid":16,"dropped":0,"observedAt":1792072109699}
+{"event":"heartbeat","at":1792072109829,"monoMs":4887.56245,"pid":16,"dropped":0,"observedAt":1792072109830}
+{"event":"heartbeat","at":1792072109930,"monoMs":4988.181579,"pid":16,"dropped":0,"observedAt":1792072109940}
+{"event":"session_start","at":1792072109946,"monoMs":5004.343444,"pid":16,"dropped":0,"observedAt":1792072109947}
+{"event":"stdin_dispatch","at":1792072109964,"monoMs":5021.91217,"pid":16,"dropped":0,"bytes":15,"hasEscape":false,"observedAt":1792072109964}

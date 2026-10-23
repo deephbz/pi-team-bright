@@ -1,0 +1,118 @@
+{
+  "evidence": "real Pi TUI in Linux PTY; scripted provider; synthetic carrier bindings",
+  "platform": "Linux-6.18.44-x86_64-with-glibc2.39",
+  "node": "v24.19.0",
+  "pi": "0.83.0",
+  "base": "0f39e060035d3e113c34deab1e1bd845a8e4e818",
+  "diagnostics": true,
+  "loadavg": [
+    0.4375,
+    0.2197265625,
+    0.08837890625
+  ],
+  "startup": [
+    {
+      "pair": 0,
+      "cache": "cold",
+      "ready_ms": 5024.85861799866,
+      "first_echo_ms": 13.656701005995274,
+      "cache_files": 129
+    },
+    {
+      "pair": 0,
+      "cache": "warm",
+      "ready_ms": 1470.310351997614,
+      "first_echo_ms": 11.740336000919342,
+      "cache_files": 129
+    }
+  ],
+  "samples": [
+    {
+      "mode": "async",
+      "key_echo_ms": 3.0132350027561188,
+      "escape_dispatch_ms": 10.228411003947258,
+      "escape_abort_signal_ms": 10.998102001845837,
+      "escape_agent_end_ms": 1929.676306001842,
+      "tool_wall_ms": 2000.3365569999999,
+      "iterations": 0
+    },
+    {
+      "mode": "async",
+      "key_echo_ms": 3.7062680050730705,
+      "escape_dispatch_ms": 10.649160005152225,
+      "escape_abort_signal_ms": 11.002332001924515,
+      "escape_agent_end_ms": 1922.5862070024014,
+      "tool_wall_ms": 1999.5434099999998,
+      "iterations": 0
+    },
+    {
+      "mode": "async",
+      "key_echo_ms": 2.5132500007748604,
+      "escape_dispatch_ms": 10.357468999922276,
+      "escape_abort_signal_ms": 10.68359100073576,
+      "escape_agent_end_ms": 1930.4035649970174,
+      "tool_wall_ms": 2000.5979899999993,
+      "iterations": 0
+    },
+    {
+      "mode": "coordination",
+      "key_echo_ms": 12.216744005680084,
+      "escape_dispatch_ms": 84.11791200190783,
+      "escape_abort_signal_ms": 84.75154700130224,
+      "escape_agent_end_ms": 2083.420073002577,
+      "tool_wall_ms": 2159.681928,
+      "iterations": 14
+    },
+    {
+      "mode": "coordination",
+      "key_echo_ms": 110.43805000185966,
+      "escape_dispatch_ms": 98.31401799619198,
+      "escape_abort_signal_ms": 98.62238100171089,
+      "escape_agent_end_ms": 2180.0015809983015,
+      "tool_wall_ms": 2250.760746,
+      "iterations": 9
+    },
+    {
+      "mode": "coordination",
+      "key_echo_ms": 25.370646998286247,
+      "escape_dispatch_ms": 15.155588001012802,
+      "escape_abort_signal_ms": 15.56470499932766,
+      "escape_agent_end_ms": 2149.1924099996686,
+      "tool_wall_ms": 2220.6430930000006,
+      "iterations": 7
+    },
+    {
+      "mode": "block",
+      "key_echo_ms": 651.9229470044374,
+      "escape_dispatch_ms": 639.609745003283,
+      "escape_abort_signal_ms": 639.987965002656,
+      "escape_agent_end_ms": 1127.2458740025759,
+      "tool_wall_ms": 1349.9040999999997,
+      "iterations": 0
+    },
+    {
+      "mode": "block",
+      "key_echo_ms": 649.4216700047255,
+      "escape_dispatch_ms": 636.8137300014496,
+      "escape_abort_signal_ms": 637.1233570054173,
+      "escape_agent_end_ms": 1127.1773860007524,
+      "tool_wall_ms": 1350.3842590000004,
+      "iterations": 0
+    },
+    {
+      "mode": "block",
+      "key_echo_ms": 648.5566240027547,
+      "escape_dispatch_ms": 635.8987179994583,
+      "escape_abort_signal_ms": 636.1457610055804,
+      "escape_agent_end_ms": 1127.641173005104,
+      "tool_wall_ms": 1350.1550849999985,
+      "iterations": 0
+    }
+  ],
+  "status": "failed",
+  "gates": {
+    "healthy_echo_under_100ms": false,
+    "healthy_escape_signal_under_100ms": true,
+    "detects_700ms_block": true
+  }
+}

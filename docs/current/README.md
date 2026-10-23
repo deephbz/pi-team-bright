@@ -712,6 +712,16 @@ context or the executable contract sources.
 
 ## Constraints and open work
 
+Leader pane freeze remains unresolved. The rc.4
+[real-Pi PTY probe](../journal/2026-10-15-leader-tui-responsiveness.md)
+exceeds a 100 ms input budget during sustained graph/journal work with synthetic
+Worker bindings (echo up to 164 ms; Escape abort signal up to 153 ms). This is
+not a reproduction of the original incident or a full live-Team result.
+The [probe and opt-in recorder](../../scripts/leader-responsiveness/README.md)
+separate PTY echo, Escape dispatch, tool cancellation and startup evidence.
+Use the external watchdog on the next live incident; preserve its bounded logs
+before rotation. Actual macOS/Herdr/Worker concurrency remains unmeasured here.
+
 The required observation invariant remains one complete coordination observation
 or no semantic observation. An unavailable Task authority must not advance the
 branch cursor, report zero Tasks, or present the last complete projection as
