@@ -259,6 +259,11 @@ export async function markMessagesReadForMembership(
   });
 }
 
+/** Delivery intent stored with the inbox record. Default false keeps records unchanged. */
+export interface MessageDeliveryOptions {
+  interrupt?: boolean;
+}
+
 export async function sendPlainMessage(
   teamName: string,
   fromName: string,
@@ -268,6 +273,7 @@ export async function sendPlainMessage(
   color: string | undefined,
   expectedSender: ExpectedSenderBinding | undefined,
   membership: AlertMembershipPort,
+  options?: MessageDeliveryOptions,
 ): Promise<IdentifiedInboxMessage & { deliveryDegraded?: import("../utils/recipient-delivery-lifecycle").DeliveryDegradation[] }> {
   const outcome = await membership.withCurrentDelivery({
     teamName,
@@ -284,6 +290,7 @@ export async function sendPlainMessage(
       read: false,
       summary,
       color,
+      ...(options?.interrupt === true ? { interrupt: true as const } : {}),
     });
     return { ...message, ...(delivery.deliveryDegraded?.length ? { deliveryDegraded: delivery.deliveryDegraded } : {}) };
   });
@@ -310,13 +317,14 @@ export async function broadcastMessage(
   color: string | undefined,
   expectedSender: ExpectedSenderBinding | undefined,
   membership: AlertMembershipPort,
+  options?: MessageDeliveryOptions,
 ): Promise<BroadcastMessageResult> {
   const snapshot = await membership.currentRecipients(teamName, fromName);
   if (snapshot.kind === "team_absent") throw new MessageTeamDoesNotExistError(teamName);
   const recipients = snapshot.recipients.map((recipient) => recipient.name);
 
   const deliveryPromises = recipients
-    .map((recipient) => sendPlainMessage(teamName, fromName, recipient, text, summary, color, expectedSender, membership));
+    .map((recipient) => sendPlainMessage(teamName, fromName, recipient, text, summary, color, expectedSender, membership, options));
 
   // Execute deliveries in parallel and wait for all to settle
   const results = await Promise.allSettled(deliveryPromises);

@@ -53,6 +53,8 @@ export interface SendAlertInput {
   taskId?: string;
   taskVersion?: string;
   expectedSender?: ExpectedSenderBinding;
+  /** Leader-only. Abort the recipient's in-flight operation before presentation. */
+  interrupt?: boolean;
 }
 
 export interface SendAlertResult {

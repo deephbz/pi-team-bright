@@ -100,6 +100,10 @@ describe("minimal PiTeams agent-facing surface", () => {
     expect(JSON.stringify(workerUpdate?.parameters.properties?.transition)).toContain("claim");
     expect(JSON.stringify(workerUpdate?.parameters.properties?.transition)).not.toMatch(/dependency_waiting|ready/);
     expect(registeredTools.some((candidate) => candidate.name === "task_link")).toBe(false);
+    // Interrupt is leader-only; the Worker Alert surface must not expose it.
+    const workerAlert = workerTools.find(candidate => candidate.name === "alert_send");
+    expect(workerAlert?.parameters.properties).toHaveProperty("kind");
+    expect(workerAlert?.parameters.properties).not.toHaveProperty("interrupt");
   });
 
   it("keeps terminal window placement as Team policy", () => {
@@ -141,6 +145,7 @@ describe("minimal PiTeams agent-facing surface", () => {
       additionalProperties: false,
     });
     expect(alert.parameters.properties).toHaveProperty("to");
+    expect(alert.parameters.properties?.interrupt).toMatchObject({ type: "boolean" });
     const alertSchema = JSON.stringify(alert.parameters);
     for (const kind of ["clarification", "attention", "announcement"]) {
       expect(alertSchema).toContain(kind);

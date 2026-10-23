@@ -524,6 +524,7 @@ export const AlertSendParametersSchema = Type.Object({
   text: Type.String({ minLength: 1 }),
   task_id: Type.Optional(TaskId),
   task_version: Type.Optional(TaskVersionRefSchema),
+  interrupt: Type.Optional(Type.Boolean({ description: "Abort the recipient's current run first." })),
 }, { additionalProperties: false });
 
 export const ALERT_ACCEPTANCE_DESCRIPTION = "Stored for the recipient. Presentation and processing are unconfirmed.";
@@ -1009,7 +1010,7 @@ export const modelToolCatalog = {
       actors: ["leader"],
       commonUseCases: ["Escalate exceptional coordination to one current Worker or announce to the Team."],
       whenNotToUse: ["Do not use an Alert to assign, advance, block, or complete a Task."],
-      sideEffects: ["Delivers through exact current Memberships and appends one Alert event.", "A refused Alert creates no delivery, event, or Task change."],
+      sideEffects: ["Delivers through exact current Memberships and appends one Alert event.", "With interrupt: true, aborts the recipient's in-flight operation, then presents the Alert in a new turn. Task state is unchanged.", "A refused Alert creates no delivery, event, or Task change."],
       parameters: AlertSendParametersSchema,
       result: AlertSendResultSchema,
       examples: [],

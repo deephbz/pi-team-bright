@@ -323,7 +323,7 @@ describe("candidate model-tool catalog", () => {
     expect(html).toContain("worker_stop({ worker })");
     expect(html).toContain("team_shutdown({ })");
     expect(html).not.toContain("task_link({");
-    expect(html).toContain("alert_send({ to, kind, text, task_id, task_version })");
+    expect(html).toContain("alert_send({ to, kind, text, task_id, task_version, interrupt? })");
     expect(html).toContain("Raw semantic JSON");
     expect(html).toContain("Validated model projection");
     expect(html).toContain("accepted");
