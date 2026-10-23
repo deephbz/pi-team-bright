@@ -24,6 +24,17 @@ review an opt-in `second-opinion` Worker requested by the user. The packaged
 skill and `AGENTS.md` carry the procedure; the settings example names the role.
 Runtime code is unchanged. Real-Team verification of both behaviors is pending.
 
+## Lead guidance: elapsed time, fluid delegation, owner reporting
+
+[Decision 0025](../decisions/0025-elapsed-time-delegation-and-owner-reporting.md)
+makes elapsed time the cost. Workers are cheap, so parallel and speculative
+starts are the default. The lead does a lone high-stakes Task itself. Repair
+never waits for a busy builder. Owner reports use three states: Delivered,
+Blocked, and In progress. The skill and `AGENTS.md` carry the procedure. The
+leader-only Alert `interrupt` flag is the one runtime addition. Real-Team
+verification is pending. So is evidence that a superseded Attempt's Worker
+stops promptly.
+
 ## Compact identity labels and HUD
 
 New Team creation uses a local date prefix by default. Global
