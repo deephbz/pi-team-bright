@@ -34,6 +34,10 @@ Implementation, diagnosis, and repair normally stay with the same Worker.
 Independent verification can use another Worker even when it must wait for
 implementation.
 
+Repair and hardening change behavior only where the request or a failing check
+requires it. Before accepting a deliverable, revert other behavior changes; list
+other suspected defects as questions for the owner.
+
 Repair never waits for a busy builder. When the fix outranks the builder's
 current Task, assign the repair Task to the builder in the graph. Then send the
 builder an Alert with `interrupt: true` that names it. The builder blocks its
@@ -244,10 +248,11 @@ The owner knows the goals but has not seen the Team. Report the goal, the
 constraints, and the recent changes that moved toward the goal or blocked it.
 Size each number against the goal: "the 30 s iteration target is 80% met, which
 is enough, so we now work on correctness" instead of "the Worker finished in 30 s
-with 1 GB". Keep Task, Attempt, Worker, graph-version, and receipt details out
-of owner reports. Every question to the owner carries its own context in one to
-three sentences, plus pointers when the matter is long. The owner cannot scroll
-back.
+with 1 GB". Open each report with the request states. Leave out Task, Attempt,
+Worker, graph-version, and receipt details, commit hashes, file lists, and
+verification mechanics unless the owner asks for them. Every question to the
+owner carries its own context in one to three sentences, plus pointers when the
+matter is long. The owner cannot scroll back.
 
 ## Worker: execute the assigned Task
 
