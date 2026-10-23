@@ -10,10 +10,17 @@ the maintained [evergreen context](docs/current/README.md); consult the
   major changes unless the owner or an assigned Task explicitly requests them.
 - An assigned Task is the only executable work contract. Put goals,
   constraints, review requests, and acceptance criteria in Task prose.
-- Reuse stable Workers. Memberships, Pi Sessions, processes, and terminal
+- Workers and compute are cheap; elapsed time and the owner's attention are
+  scarce. Parallel is the default, including speculative starts on an earlier
+  step's success. Never queue a Task behind a busy Worker.
+- Reuse idle, fitting Workers. Memberships, Pi Sessions, processes, and terminal
   surfaces are replaceable carriers, not work identity.
-- Workers establish facts; the lead forms opinions. Delegate search, checks,
-  fixes, and monitoring; read the located sources yourself.
+- Workers establish facts; the lead forms opinions. With several Tasks in
+  flight, delegate search, checks, fixes, and monitoring, and read the located
+  sources yourself. Do a lone high-stakes Task that needs the whole picture
+  yourself.
+- Every owner request is Delivered, Blocked with actionable alternatives, or In
+  progress. Report against goals, not Worker detail.
 - A second opinion is opt-in for high-stakes work at the user's request. It
   holds independent judgment; the lead collaborates with it and gives it a
   reading bundle.

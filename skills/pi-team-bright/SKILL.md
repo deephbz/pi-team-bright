@@ -9,6 +9,9 @@ A Team holds a durable project or coordination boundary. A Worker holds a reusab
 scope and working context. A Task assigns one bounded outcome to a Worker.
 These have separate lifecycles: finishing a Task does not end its Worker or Team.
 
+Workers and compute are cheap. Elapsed time and the owner's attention are the
+scarce resources. Every rule below spends compute to save them.
+
 ## Lead: own the project and coordinate execution
 
 The one lead carries two responsibilities:
@@ -25,10 +28,19 @@ Restore an existing Team with `team_sync` snapshot when context is missing.
 For a new Team, call `team_create` first; sync does not discover or create Teams.
 Reuse the current Team for related requests until the owner ends or resets it.
 
-Reuse suitable Workers. Create one when it enables useful early starts,
-establishes a distinct reusable scope, or isolates a perspective. Implementation,
-diagnosis, and repair normally stay with the same Worker. Independent verification
-can use another Worker even when it must wait for implementation.
+Reuse an idle Worker whose scope fits. Otherwise create one. The runtime runs one
+in-progress Task per Worker, so never queue a Task behind a busy Worker.
+Implementation, diagnosis, and repair normally stay with the same Worker.
+Independent verification can use another Worker even when it must wait for
+implementation.
+
+Repair never waits for a busy builder. When the fix outranks the builder's
+current Task, assign the repair Task to the builder in the graph. Then send the
+builder an Alert with `interrupt: true` that names it. The builder blocks its
+current Task with preemption evidence, runs the repair, then resumes. Otherwise,
+give the repair to a fresh Worker with a handoff, or do it yourself. Choose by
+the situation at hand: urgency, how much builder context the fix needs, and what
+else needs the lead.
 
 Choose a new Worker's model role from the Team creation or snapshot catalog.
 Omission selects the configured default model role; without one, select a role
@@ -55,6 +67,21 @@ user. When the material is too large to read, read the parts that decide the
 outcome, check the Worker's interpretation against them, and mark what you did
 not check as provisional. A report a Worker wrote is evidence to verify, not a
 conclusion to relay. The final report to the user is the lead's.
+
+## Lead: choose who executes
+
+- Several Tasks in flight, or more work visible: delegate each one. Keep the lead
+  free to plan, integrate, and hold the whole picture.
+- One Task in flight, nothing else visible, and that Task is high-leverage,
+  high-stakes, and needs the whole picture: do it yourself. Side Tasks you start
+  to support that work, such as alternatives or check preparation, do not count
+  as other work.
+
+`ptb.team-update` arrives as a follow-up, so Worker results wait until the lead's
+turn ends. Keep direct work to slices of one turn and end each turn at a
+checkpoint. When new work arrives, hand the direct work off at the next
+checkpoint. The handoff is a Task whose prose holds the goal, the current state,
+artifact pointers, and the next step. Then return to orchestration.
 
 ## Lead: work with a second opinion
 
@@ -96,8 +123,9 @@ successor. A failed Attempt can return its Task to waiting while repair runs.
 
 ## Lead: plan early starts
 
-Reduce elapsed time to accepted results and useful learning. Look for both
-opportunities when dividing work:
+Reduce elapsed time to accepted results and useful learning. Parallel is the
+default; serial work needs a named reason. Look for three opportunities when
+dividing work:
 
 - Start independent Tasks together. Extract a small shared contract when it lets
   Workers proceed without waiting for another implementation. Backend and frontend
@@ -105,6 +133,13 @@ opportunities when dividing work:
 - Start reversible parts of dependent work with preliminary inputs or explicit
   assumptions. Literature review and data analysis can start together. Test
   preparation can precede implementation; execution checks need the implementation.
+- Speculate on success. When B and C are worthless unless A succeeds, start A, B,
+  and C together anyway. B and C say in their prose that they assume A succeeds,
+  and which part of A's result they assume. They carry no `needs` edge on A. An
+  integration Task `needs` A, B, and C and checks B and C against A's actual
+  result. If A fails, drop B and C from the next `task_graph_apply` at once: the
+  runtime supersedes their Attempts. Give them no failure route or repair. Report
+  A's failure against the goal, not the discarded work.
 
 Define an early Task's outcome as the useful work it can complete now. Put its
 assumptions, source pointers, and required later checks in Task prose. Give the
@@ -120,12 +155,14 @@ partial-result Task when another Task needs that verified output to start.
 Revise the graph when Task outcomes or dependencies change within the agreed scope.
 Escalate changes to the requested goal to the owner. Keep valid work. Use bounded
 failure routes for failed checks, or add a repair Task for a new outcome. Keep
-repair with the affected Worker and make later checks depend on the repaired result.
-Check assumptions against actual inputs before accepting the combined result.
+repair with the affected Worker, subject to the busy-builder rule above. Make later
+checks depend on the repaired result. Check assumptions against actual inputs
+before accepting the combined result.
 
-Account for Worker capacity, shared resources, human review, and rework when choosing
-early starts. More active Workers help only when they reduce total elapsed time or
-increase useful learning within the same budget.
+Worker count and wasted compute are no cost. Hard limits still bind: host capacity
+for Worker processes, shared locks and rate limits, the lead's turn, and the
+owner's review. Speculative and failed work never reaches the owner as a decision
+or a review item.
 
 ## Lead: supervise and finish the request
 
@@ -180,17 +217,47 @@ instructions remain authoritative.
 If a Worker stays at `actuation_pending` after an accepted Alert, use `team_sync`
 and involve the human if recovery needs intervention.
 
-Report the requested outcome with evidence, or identify the blocker and next action.
 Keep reusable Workers and the Team available. Stop a Worker only after its assigned
 nonterminal Tasks resolve and its capacity is no longer needed. Shut down the Team
 only when the owner explicitly ends or resets its durable boundary; reconcile first.
+
+## Lead: report to the owner
+
+Every owner request is in exactly one state. Lead with Blocked requests, since
+they need the owner.
+
+- **Delivered**: the result is handed over, with evidence against the goal.
+- **Blocked**: name the blocker and give actionable alternatives, each with its
+  cost. A request can be blocked because it rests on a wrong understanding or
+  should not be done, because a better alternative exists, or because it should be
+  done but something real stops it. A pane ID for a `blocked` Worker is a valid
+  alternative.
+- **In progress**: the work is dispatched and moving. Say what moves next and the
+  result to expect.
+
+Never end a turn with an open request in no state. Examples: nonterminal Tasks
+while every Worker is idle, or a failed Task with no route. `caught_up` does not
+mean Delivered. A blocked or failed Task blocks a request only when you cannot
+route around it.
+
+The owner knows the goals but has not seen the Team. Report the goal, the
+constraints, and the recent changes that moved toward the goal or blocked it.
+Size each number against the goal: "the 30 s iteration target is 80% met, which
+is enough, so we now work on correctness" instead of "the Worker finished in 30 s
+with 1 GB". Keep Task, Attempt, Worker, graph-version, and receipt details out
+of owner reports. Every question to the owner carries its own context in one to
+three sentences, plus pointers when the matter is long. The owner cannot scroll
+back.
 
 ## Worker: execute the assigned Task
 
 Use your runtime-provided Worker tools and claim an assigned ready Task before work.
 Keep the selected model during work. Human model changes in Pi remain authoritative.
 Record success or failure with external evidence. Use `block` for an external blocker
-and `resume` when it clears. Follow the returned Task state after every transition.
+and `resume` when it clears. An Alert with `interrupt: true` cut your current step
+short and names an urgent Task. Block your current Task with preemption evidence
+and its resume point, claim the urgent Task, then resume the blocked one.
+Follow the returned Task state after every transition.
 Keep still-relevant execution context in `current_context`; use evidence for outcomes
 and blockers. Send an Alert to the lead when exceptional clarification is needed.
 
