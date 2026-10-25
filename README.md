@@ -298,11 +298,12 @@ signal contract and executable checks.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.25.0
+pi install npm:@hypercarrier/pi-team-bright@0.25.1
 ```
 
 From 0.23.1, read the two upgrade sections below before you reload a live
-Team. See the [v0.25.0 release notes](docs/release/v0.25.0-release-notes.md).
+Team. See the [v0.25.0](docs/release/v0.25.0-release-notes.md) and
+[v0.25.1](docs/release/v0.25.1-release-notes.md) release notes.
 
 ### Graph-only Task authority (0.25.0)
 
