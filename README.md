@@ -298,28 +298,25 @@ signal contract and executable checks.
 Install the stable release by exact version:
 
 ```sh
-pi install npm:@hypercarrier/pi-team-bright@0.23.1
+pi install npm:@hypercarrier/pi-team-bright@0.25.0
 ```
 
-The carrier-liveness prerelease is on npm `next`:
+From 0.23.1, read the two upgrade sections below before you reload a live
+Team. See the [v0.25.0 release notes](docs/release/v0.25.0-release-notes.md).
 
-```sh
-pi install npm:@hypercarrier/pi-team-bright@0.24.0-rc.7
-```
-
-### Graph-only Task authority (0.24.0-rc.7)
+### Graph-only Task authority (0.25.0)
 
 New Teams persist an explicit empty graph snapshot before creation succeeds.
 The first `task_graph_apply` creates its first graph revision. All Task reads,
 transitions, views, delivery recovery, and work-dependent lifecycle guards use
 that snapshot. Old backend fields do not override a valid graph.
 
-PTB 0.24 does not support graphless Teams that keep Tasks in Beads. It refuses
-Task operations and work-dependent stop or shutdown. It leaves `.beads/` data
-unchanged and supplies no export, migration, or fallback reader. Finish those
+PTB 0.24 and later do not support graphless Teams that keep Tasks in Beads. They refuse
+Task operations and work-dependent stop or shutdown. They leave `.beads/` data
+unchanged and supply no export, migration, or fallback reader. Finish those
 Teams with their original version or preserve their stores and start new Teams.
 
-### Carrier-liveness upgrade (0.24.0-rc.7)
+### Carrier-liveness upgrade (0.25.0)
 
 On macOS, the package's `postinstall` hook builds the process-generation helper
 from included Rust source. If `rustc` is missing, installation still succeeds.
