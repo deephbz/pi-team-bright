@@ -25,3 +25,28 @@ it("installs without rustc with one macOS helper build warning and exit zero", (
     expect(fs.existsSync(path.join(root, "native/bin"))).toBe(false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
+
+it("installs when rustc cannot link, with a build warning and exit zero", () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "ptb-install-rustc-fails-"));
+  try {
+    const scripts = path.join(root, "scripts");
+    const bin = path.join(root, "fixture-bin");
+    fs.mkdirSync(scripts);
+    fs.mkdirSync(bin);
+    const script = path.join(scripts, "build-process-generation.sh");
+    fs.copyFileSync("scripts/build-process-generation.sh", script);
+    // rustc exists but its link step fails, as with an unaccepted Xcode license.
+    fs.writeFileSync(path.join(bin, "uname"), "#!/bin/sh\nprintf 'Darwin\\n'\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "dirname"), '#!/bin/sh\nprintf "%s\\n" "${1%/*}"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "rustc"), "#!/bin/sh\necho 'error: linking with `cc` failed' >&2\nexit 1\n", { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "mkdir"), '#!/bin/sh\n[ "$1" = -p ] && shift\nexec /bin/mkdir -p "$@"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, "tail"), '#!/bin/sh\nexec /usr/bin/tail "$@"\n', { mode: 0o755 });
+    const result = spawnSync("/bin/sh", [script], { cwd: root, env: { ...process.env, PATH: bin }, encoding: "utf8", timeout: 5000 });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toMatch(/warning.*helper failed to build/i);
+    expect(result.stderr).toContain("npm run build:process-generation");
+    expect(result.stderr).toContain("linking with `cc` failed");
+    expect(fs.existsSync(path.join(root, "native/bin/process-generation"))).toBe(false);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
