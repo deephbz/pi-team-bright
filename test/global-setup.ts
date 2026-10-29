@@ -11,7 +11,7 @@ export default function setupTestHomes() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "pi-teams-vitest-"));
 
   process.env[TEST_ROOT_ENV] = root;
-  process.env[OPERATOR_HOME_ENV] = os.homedir();
+  process.env[OPERATOR_HOME_ENV] = os.userInfo().homedir;
 
   const cleanup = () => fs.rmSync(root, { recursive: true, force: true });
 

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { vi } from "vitest";
+import { proveIsolatedHome } from "./home-guard";
 
 // Unit fixtures have one synthetic live process: the test process. Other PIDs
 // need an explicit scenario probe. Restore/reset of spies must not expose the
@@ -32,6 +33,8 @@ fs.mkdirSync(home, { recursive: true });
 process.env.HOME = home;
 process.env.USERPROFILE = home;
 process.env.PI_TEAMS_VITEST_HOME = home;
+// Prove isolation before this file or any test writes below HOME.
+proveIsolatedHome(home);
 const agentDir = path.join(home, ".pi", "agent");
 fs.mkdirSync(agentDir, { recursive: true });
 // Fixed-name fixtures opt out of calendar naming and never read operator settings.
